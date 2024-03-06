@@ -1,6 +1,7 @@
 import numpy as np
 import json
 import matplotlib.pyplot as plt
+from scipy.integrate import simpson
 
 class MVPmodel:
     def __init__(self,**kwargs):
@@ -109,24 +110,22 @@ class MVPmodel:
         return 1/2 * (G - self.Gbar)**2 + self.kappa/2 * np.max((self.Gmin - G), 0)**2
  
 
-    def bolus_sim(self, bolus, meal_size, iterations = 100, plot = False):
+    def bolus_sim(self, bolus, meal_size, meal_idx = 0, iterations = 100, plot = False):
         ds = np.zeros(iterations)
-        ds[0] = meal_size / self.tausc # Ingestion 
+        ds[meal_idx] = meal_size / self.tausc # Ingestion 
         states, _ = self.simulate(ds, bolus)
         Gt = states[:, 5]
         p = np.array([self.glucose_penalty(G = G) for G in Gt])
-        phi = np.sum(self.tausc * p)
+        t = self.time_arr(iterations + 1)
+        phi = simpson(p, x = t)
         if plot:
             fig, ax = plt.subplots(1,2)
-            t = self.time_arr(iterations + 1)
             ax[0].plot(t, p)
             ax[1].plot(t, Gt)
             ax[0].set_title("Penalty Function")
             ax[1].set_title("Blood Glucose")
             plt.show()
         return phi, p, Gt
-
-
 
     def euler_step(self, dx):
         """
@@ -193,17 +192,18 @@ class MVPmodel:
             ax[i//2,i%2].legend()
         return
 
-    def optimal_bolus(self, min_U = 0, max_U = 75, min_meal = 30, max_meal = 150):
-        Us = np.linspace(min_U, max_U, 50)
-        meals = np.linspace(min_meal, max_meal, 50)
+    def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 75, min_meal = 30, max_meal = 150):
+        n = 50
+        Us = np.linspace(min_U, max_U, n)
+        meals = np.linspace(min_meal, max_meal, n)
 
         res = np.empty((len(meals), len(Us), 3))
 
         for i, d0 in enumerate(meals):
             for j, U in enumerate(Us):
                 self.reset()
-                phi, _, _ = self.bolus_sim(U, d0)
-                res[i, j] = [phi]*3
+                phi, _, _ = self.bolus_sim(U, d0, meal_idx=meal_idx)
+                res[n - 1 - i, j] = [phi]*3
 
         best = np.argmin(res[:,:,0], axis=1)
 
@@ -213,7 +213,7 @@ class MVPmodel:
         for i,j in enumerate(best):
             res[i,j] = [1,0,0]
 
-        plt.imshow(res, extent = [min_U, max_U, max_meal, min_meal], aspect="auto")
+        plt.imshow(res, extent = [min_U, max_U, min_meal, max_meal], aspect="auto")
         plt.xlabel("Bolus Size")
         plt.ylabel("Meal Size")
 
