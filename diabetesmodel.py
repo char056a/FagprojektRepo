@@ -82,6 +82,7 @@ class MVPmodel:
         Kd = self.Kp * self.Td / self.tausc
         Dk = Kd * (y - y_prev)
         uk = self.us + Pk + I + Dk
+        uk = max(uk, 0)
         return uk, Ikp1
 
     def glucose_penalty(self, G = "Default"):
@@ -107,13 +108,17 @@ class MVPmodel:
         """
         if G == "Default":
             G = self.G
-        return 1/2 * (G - self.Gbar)**2 + self.kappa/2 * np.max((self.Gmin - G), 0)**2
+        return 1/2 * (G - self.Gbar)**2 + self.kappa/2 * max((self.Gmin - G), 0)**2
  
 
     def bolus_sim(self, bolus, meal_size, meal_idx = 0, iterations = 100, plot = False):
         ds = np.zeros(iterations)
+        us = np.ones(iterations) * self.us
+
         ds[meal_idx] = meal_size / self.tausc # Ingestion 
-        states, _ = self.simulate(ds, bolus)
+        us[0] += bolus * 1000 / self.tausc
+
+        states = self.iterate(us, ds)
         Gt = states[:, 5]
         p = np.array([self.glucose_penalty(G = G) for G in Gt])
         t = self.time_arr(iterations + 1)
@@ -153,15 +158,14 @@ class MVPmodel:
             state_list.append(self.x)
         return np.array(state_list)    
         
-    def simulate(self, ds, bolus = 0):
+    def simulate(self, ds):
         """
         :input ds: Array of "meal size" for every timestep.
         :input Gbar: Glucose concentration target
         :input us: Insulin steady state
         """
         u = self.us
-        if bolus:
-            u = 1000 * bolus / self.tausc
+
         y = [self.G]
         res = [self.x]
         I = 0
@@ -176,24 +180,74 @@ class MVPmodel:
         return np.array(res), u_list
 
     def plot(self, data, u, d):
-        t = self.time_arr(data.shape[0])
-        fig, ax = plt.subplots(2,2)
-        ax[0,0].plot(t, data[:,5], label= "Blood glucose concentration")
-        ax[0,0].plot(t, data[:,6], label = "Subcutaneous glucose concentration")
-        ax[0,0].plot(t, [self.Gbar]*data.shape[0], label= "Blood glucose target")
-        ax[0,1].plot(t, data[:,0], label= "D1")
-        ax[0,1].plot(t, data[:,1], label= "D2")
-        ax[0,1].plot(t[:-1], d, label= "d")
-        ax[1,0].plot(t, data[:,2], label= "Isc")
-        ax[1,0].plot(t, data[:,3], label= "Ip")
-        ax[1,0].plot(t, data[:,4], label= "Ieff")
-        ax[1,1].plot(t[:-1], u[:len(t) - 1], label= "Insulin Injection Rate") # Lidt bøvet måde at håndtere det her på, men det går nok.
+        t = self.time_arr(data.shape[0])/60
+        fig, ax = plt.subplots(2,2,figsize=(7,5))
+        ax[0,0].scatter(t, data[:,5], label= "Blood glucose")
+        ax[0,0].scatter(t, data[:,6], label = "Subcutaneous glucose")
+        ax[0,0].scatter(t, [self.Gbar]*data.shape[0], label= "Target")
+        ax[0,1].scatter(t, data[:,0], label= "D1")
+        ax[0,1].scatter(t, data[:,1], label= "D2")
+        ax[0,1].scatter(t[:-1], d, label= "d")
+        ax[1,0].scatter(t, data[:,2], label= "Isc")
+        ax[1,0].scatter(t, data[:,3], label= "Ip")
+        ax[1,0].scatter(t, data[:,4], label= "Ieff")
+        ax[1,1].scatter(t[:-1], u[:len(t) - 1], label= "Insulin Injection Rate") # Lidt bøvet måde at håndtere det her på, men det går nok.
+
+        ax[0,0].set_ylabel("mg/dL")
         for i in range(4):
             ax[i//2,i%2].legend()
+            ax[i//2, i%2].set_xlabel("time (h)")
+        fig.tight_layout()
+        return
+    
+    def plot2(self, data, u, d):
+        t = self.time_arr(data.shape[0])/60
+        fig = plt.figure(constrained_layout=True,figsize=(10,7))
+        subplots = fig.subfigures(2,2)
+
+        axG = subplots[0,0].subplots(1,1)
+        axG.scatter(t, data[:,5], label= "Blood glucose")
+        axG.scatter(t, data[:,6], label = "Subcutaneous glucose")
+        axG.scatter(t, [self.Gbar]*data.shape[0], label= "Target")
+        axG.set_xlabel("time (h)")
+
+        axd = subplots[0,1].subplots()
+        axd2 = axd.twinx()
+        axd2.scatter(t[:-1], d, label= "d", color="red")
+
+        axd.scatter(t, data[:,0], label= "D1")
+        axd.scatter(t, data[:,1], label= "D2")
+        axd.set_xlabel("time (h)")
+        axd.set_ylabel("g")
+        axd2.set_ylabel("g/min CHO")
+        axd.legend()
+        axd2.legend()
+
+        axI = subplots[1,0].subplots()
+        axI2 = axI.twinx()
+
+        axI.scatter(t, data[:,2], label= "Isc")
+        axI.scatter(t, data[:,3], label= "Ip")
+        axI2.scatter(t, data[:,4], label= "Ieff", color="g")
+        axI.set_xlabel("time (h)")
+        axI.set_ylabel("mg/dL")
+        axI2.set_ylabel("mg/dL")
+        axI.legend()
+        axI2.legend()
+
+        axu = subplots[1,1].subplots()
+        axu.scatter(t[:-1], u[:len(t) - 1], label= "Insulin Injection Rate") # Lidt bøvet måde at håndtere det her på, men det går nok.
+
+        axu.set_xlabel("time (h)")
+        axu.set_ylabel("mg/dL")
+        axI2.set_ylabel("mg/dL")
+        axI.legend()
+        axG.set_ylabel("mg/dL")
+    
+        fig.tight_layout()
         return
 
-    def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 75, min_meal = 30, max_meal = 150):
-        n = 50
+    def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 75, min_meal = 30, max_meal = 150, n = 50):
         Us = np.linspace(min_U, max_U, n)
         meals = np.linspace(min_meal, max_meal, n)
 
@@ -203,20 +257,20 @@ class MVPmodel:
             for j, U in enumerate(Us):
                 self.reset()
                 phi, _, _ = self.bolus_sim(U, d0, meal_idx=meal_idx)
-                res[n - 1 - i, j] = [phi]*3
+                res[n - 1 - j ,i] = [phi]*3
 
-        best = np.argmin(res[:,:,0], axis=1)
+        best = np.argmin(res[:,:,0], axis=0)
 
         r = 1 / (res.max() - res.min())
         res = r * (res - res.min())
 
         for i,j in enumerate(best):
-            res[i,j] = [1,0,0]
+            res[j,i] = [1,0,0]
 
-        plt.imshow(res, extent = [min_U, max_U, min_meal, max_meal], aspect="auto")
-        plt.xlabel("Bolus Size")
-        plt.ylabel("Meal Size")
+        plt.imshow(res, extent = [min_meal, max_meal,min_U, max_U], aspect="auto")
+        plt.ylabel("Bolus Size (U)")
+        plt.xlabel("Meal Size (g. CHO)")
 
-        best_us = [Us[i] for i in best]
-        ab, _, _, _ = np.linalg.lstsq(np.array([meals,np.ones(len(meals))]).T, best_us, rcond = None)
-        return ab
+
+        best_us = [Us[n - 1- i] for i in best]
+        return meals, best_us
