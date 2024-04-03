@@ -118,7 +118,7 @@ class MVPmodel:
         ds[meal_idx] = meal_size / self.tausc # Ingestion 
         us[0] += bolus * 1000 / self.tausc
 
-        states = self.iterate(us, ds)
+        states, _ = self.simulate(ds, us)
         Gt = states[:, 5]
         p = np.array([self.glucose_penalty(G = G) for G in Gt])
         t = self.time_arr(iterations + 1)/60
@@ -151,38 +151,63 @@ class MVPmodel:
         self.update_state(x_new)
         return
 
-
-    def iterate(self, u_list, d_list):
+    def simulate(self, ds, u_func=None):
         """
-        Simulation given a list of insulin injection and carb ingestion rates.
-        """
-        state_list = []
-        state_list.append(self.x)
-        for u, d in zip(u_list, d_list):
-            x_change = self.f(u, d)
-            self.euler_step(x_change)
-            state_list.append(self.x)
-        return np.array(state_list)    
+        Simulates patient.
         
-    def simulate(self, ds):
+        Parameters
+        ----------
+        ds : numpy array
+            Ingestion rate
+        u_func : Default = None, int, float, numpy array, list or "PID"
+            Specifies insulin injection rate.
+            If None; uses steady state insulin rate.
+            If "PID"; uses PID controller.
+        
+        Returns
+        -------
+        states : numpy array
+            State vector in each time step
+        u_list : numpy array
+            Insulin injection rate for each time step
         """
-        :input ds: Array of "meal size" for every timestep.
-        :input Gbar: Glucose concentration target
-        :input us: Insulin steady state
-        """
+        res = [self.x]
+        inp = 0
         u = self.us
 
-        y = [self.G]
-        res = [self.x]
-        I = 0
+        if isinstance(u_func, (np.ndarray, list)):
+            u = u_func[0]
+            inp = 1
+            def get_u(inp):
+                u = u_func[inp]
+                return u, inp+1
+
+        elif u_func == "PID":
+            inp = (0, self.G)
+            def get_u(inp):
+                I, y_prev = inp
+                u, I = self.PID_controller(I, self.G, y_prev)
+                return u, (I, self.G)
+
+        elif isinstance(u_func, (float, int)):
+            u = u_func
+            def get_u(inp):
+                return u_func, inp
+        else:
+            def get_u(inp):
+                return self.us, inp
+
         u_list = [u]
-        for d in ds:
+
+        for d in ds[:-1]:
             dx = self.f(u, d)
             self.euler_step(dx)     
-            y.append(self.G) 
             res.append(self.x)
-            u, I = self.PID_controller(I, y[-1], y[-2])
+            u, inp = get_u(inp)
             u_list.append(u)
+        dx = self.f(u, d)
+        self.euler_step(dx)     
+        res.append(self.x)
         return np.array(res), u_list
 
     def plot2(self, data, u, d):
