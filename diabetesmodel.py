@@ -121,12 +121,18 @@ class MVPmodel:
         states = self.iterate(us, ds)
         Gt = states[:, 5]
         p = np.array([self.glucose_penalty(G = G) for G in Gt])
-        t = self.time_arr(iterations + 1)
+        t = self.time_arr(iterations + 1)/60
         phi = simpson(p, x = t)
         if plot:
             fig, ax = plt.subplots(1,2)
             ax[0].plot(t, p)
             ax[1].plot(t, Gt)
+
+            ax[0].set_xlabel("time(h)")
+            ax[1].set_xlabel("time(h)")
+            ax[1].set_ylabel("g")
+
+
             ax[0].set_title("Penalty Function")
             ax[1].set_title("Blood Glucose")
             plt.show()
@@ -179,7 +185,7 @@ class MVPmodel:
             u_list.append(u)
         return np.array(res), u_list
 
-    def plot(self, data, u, d):
+    def plot2(self, data, u, d):
         t = self.time_arr(data.shape[0])/60
         fig, ax = plt.subplots(2,2,figsize=(7,5))
         ax[0,0].scatter(t, data[:,5], label= "Blood glucose")
@@ -200,50 +206,45 @@ class MVPmodel:
         fig.tight_layout()
         return
     
-    def plot2(self, data, u, d):
+
+    def plot(self, data, u, d):
         t = self.time_arr(data.shape[0])/60
-        fig = plt.figure(constrained_layout=True,figsize=(10,7))
-        subplots = fig.subfigures(2,2)
+        fig, ax = plt.subplots(3,2,figsize=(9,7))
 
-        axG = subplots[0,0].subplots(1,1)
-        axG.scatter(t, data[:,5], label= "Blood glucose")
-        axG.scatter(t, data[:,6], label = "Subcutaneous glucose")
-        axG.scatter(t, [self.Gbar]*data.shape[0], label= "Target")
-        axG.set_xlabel("time (h)")
+        ax[0,0].set_title("Glucose")
+        ax[0,0].plot(t, data[:,5], label= "Blood")
+        ax[0,0].plot(t, data[:,6], label = "Subcutaneous")
+        ax[0,0].plot(t, [self.Gbar]*data.shape[0], label= "Target")
+        ax[0,0].legend()
 
-        axd = subplots[0,1].subplots()
-        axd2 = axd.twinx()
-        axd2.scatter(t[:-1], d, label= "d", color="red")
+        ax[0,1].set_title("Insulin Injection Rate")
+        ax[0,1].plot(t[:-1], u[:len(t) - 1]) # Lidt bøvet måde at håndtere det her på, men det går nok.
 
-        axd.scatter(t, data[:,0], label= "D1")
-        axd.scatter(t, data[:,1], label= "D2")
-        axd.set_xlabel("time (h)")
-        axd.set_ylabel("g")
-        axd2.set_ylabel("g/min CHO")
-        axd.legend()
-        axd2.legend()
+        ax[1,0].set_title("Carbs")
+        ax[1,0].plot(t, data[:,0], label= "D1")
+        ax[1,0].plot(t, data[:,1], label= "D2")
+        ax[1,0].legend()
+        ax[1,1].set_title("Carb Ingestion (d)")
+        ax[1,1].plot(t[:-1], d)
 
-        axI = subplots[1,0].subplots()
-        axI2 = axI.twinx()
+        ax[2,0].set_title("Insulin")
+        ax[2,0].plot(t, data[:,2], label= "Subcutaneous")
+        ax[2,0].plot(t, data[:,3], label= "Plasma")
+        ax[2,0].legend()
 
-        axI.scatter(t, data[:,2], label= "Isc")
-        axI.scatter(t, data[:,3], label= "Ip")
-        axI2.scatter(t, data[:,4], label= "Ieff", color="g")
-        axI.set_xlabel("time (h)")
-        axI.set_ylabel("mg/dL")
-        axI2.set_ylabel("mg/dL")
-        axI.legend()
-        axI2.legend()
+        ax[2,1].plot(t, data[:,4])
+        ax[2,1].set_title("Effective Insulin")
 
-        axu = subplots[1,1].subplots()
-        axu.scatter(t[:-1], u[:len(t) - 1], label= "Insulin Injection Rate") # Lidt bøvet måde at håndtere det her på, men det går nok.
 
-        axu.set_xlabel("time (h)")
-        axu.set_ylabel("mg/dL")
-        axI2.set_ylabel("mg/dL")
-        axI.legend()
-        axG.set_ylabel("mg/dL")
-    
+        ax[0,0].set_ylabel("mg/dL")
+        ax[0,1].set_ylabel("mU/min")
+        ax[1,0].set_ylabel("g")
+        ax[1,1].set_ylabel("g CHO/min")
+        ax[2,0].set_ylabel("mU/dL")
+        ax[2,1].set_ylabel("mU/dL")
+
+        for i in range(6):
+            ax[i//2, i%2].set_xlabel("time (h)")
         fig.tight_layout()
         return
 
