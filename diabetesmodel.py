@@ -19,8 +19,6 @@ class MVPmodel:
     def __str__(self):
         return str(self.__dict__)
         
-
-
     def update_state(self, x_new):
         """Update state vector to values given by input"""
         self.x = x_new
@@ -186,7 +184,7 @@ class MVPmodel:
             inp = (0, self.G)
             def get_u(inp):
                 I, y_prev = inp
-                u, I = self.PID_controller(I, self.G, y_prev)
+                u, I = self.PID_controller(I, self.Gsc, y_prev)
                 return u, (I, self.G)
 
         elif isinstance(u_func, (float, int)):
@@ -287,7 +285,7 @@ class MVPmodel:
 
         best = np.argmin(res[:,:,0], axis=0)
 
-        r = 1 / (res.max() - res.min())
+        r = np.sqrt(1 / (res.max() - res.min()))
         res = r * (res - res.min())
 
         for i,j in enumerate(best):

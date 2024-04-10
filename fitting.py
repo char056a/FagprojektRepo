@@ -8,6 +8,8 @@ def piecewise_linear(b1, a1, b2, a2, x_split):
         else:
             return a2 * x + b2
     def func_arr(xs):
+        if isinstance(xs, (float, int)):
+            return func(xs)
         ys = []
         for x in xs:
             ys.append(func(x))
