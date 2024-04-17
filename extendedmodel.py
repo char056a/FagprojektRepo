@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 
 class patient:
-    def __init__(self, model = "EHM", patient_type = 0,**kwargs):
+    def __init__(self, model = "EHM", patient_type = 1,**kwargs):
         self.model = model.upper()
         with open('config.json', 'r') as f:
             defaults = json.load(f)
@@ -19,7 +19,7 @@ class patient:
 
         for key in self.state_keys:
             setattr(self, key+"0", defaults[key])
-        # 
+
         if self.model == "EHM":
             self.f_func = lambda *args : EHM(self, *args)
         if self.model == "MVP":
@@ -31,9 +31,13 @@ class patient:
         
     def get_state(self):
         """Update state vector to values given by input"""
-        x = [getattr(self,key) for key in self.state_keys]
+        x = np.array([getattr(self,key) for key in self.state_keys])
         return x
 
+    def get_attr(self, states, attr):
+        """Returns column of state matrix with idx matching given attribute"""
+        idx = self.state_keys.index(attr) # Finds the index of desired attribute
+        return states[:,idx]
 
     def update_state(self, x_new):
         """Update state vector to values given by input"""
@@ -161,7 +165,8 @@ class patient:
         u_list : numpy array
             Insulin injection rate for each time step
         """
-        res = [self.x]
+        res = np.empty((len(ds)+1, len(self.state_keys)))
+        res[0, :] = self.get_state()
         inp = 0
         u = self.us
         if isinstance(u_func, (np.ndarray, list)):
@@ -189,15 +194,15 @@ class patient:
 
         u_list = [u]
 
-        for d in ds[:-1]:
-            dx = self.f(u, d)
+        for i,d in enumerate(ds[:-1]):
+            dx = self.f_func(u, d)
             self.euler_step(dx)     
-            res.append(self.get_state())
+            res[i,:] = self.get_state()
             u, inp = get_u(inp)
             u_list.append(u)
-        dx = self.f(u, d)
+        dx = self.f_func(u, d)
         self.euler_step(dx)     
-        res.append(self.x)
+        res[i+1, :] = self.get_state()
         return np.array(res), u_list
 
 
@@ -294,7 +299,7 @@ def MVP(self, u, d):
     return dx
 
 
-def EHM(self, uI, uG, d):
+def EHM(self, uI, d, uG = 0):
     """
     Solves dx = f(x, u, d)
 
