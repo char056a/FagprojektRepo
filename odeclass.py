@@ -1,3 +1,4 @@
+import numpy as np
 class ODE:
     def __init__(self, data):
         for key, value in data.items():
