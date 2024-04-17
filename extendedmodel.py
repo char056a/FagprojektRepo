@@ -2,75 +2,29 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 from scipy.integrate import simpson
+from odeclass import ODE
 
-class patient:
-    def __init__(self, model = "EHM", patient_type = 1,pancreas_model = "SD",**kwargs):
+class patient(ODE):
+    def __init__(self, model = "EHM", patient_type = 1, pancreas_model = "SD",**kwargs):
         self.model = model.upper()
         self.pancreas_model = pancreas_model.upper()
+
         defaults = {}
         with open('config.json', 'r') as f:
             data = json.load(f)
         defaults.update(data["general"])
         defaults.update(data[self.model])
-
         #defaults.update(data[self.pancreas_model])
+        defaults.update(kwargs) 
 
-        defaults.update(kwargs)
+        super().__init__(defaults) # initialises patient object with attributes and methods of ODE class
 
-        for key, value in defaults.items():
-            setattr(self, key, value)
-
-        for key in self.state_keys:
-            setattr(self, key+"0", defaults[key])
-
+        # sets function to compute derivative of state
         if self.model == "EHM":
             self.f_func = lambda *args : EHM(self, *args)
         if self.model == "MVP":
             self.f_func = lambda *args : MVP(self, *args)
             
-
-    def __str__(self):
-        return str(self.__dict__)
-        
-    def get_state(self):
-        """Update state vector to values given by input"""
-        x = np.array([getattr(self,key) for key in self.state_keys])
-        return x
-
-    def get_attr(self, states, attr):
-        """Returns column of state matrix with idx matching given attribute"""
-        idx = self.state_keys.index(attr) # Finds the index of desired attribute
-        return states[:,idx]
-
-    def update_state(self, x_new):
-        """Update state vector to values given by input"""
-        for key, val in zip(self.state_keys, x_new):
-            setattr(self, key, val)
-        return
-
-    def reset(self):
-        """Resets state to x0"""
-        x0 = [getattr(self,key+"0") for key in self.state_keys]
-        self.update_state(x0)
-        return
-
-    def time_arr(self, length):
-        return np.arange(0, length*self.timestep, self.timestep)
-
-    def euler_step(self, dx):
-        """
-        Updates state using state vector derivative and one step of eulers method.
-        
-        Parameters
-        ----------
-        dx : numpy array
-            Derivative of state vector.
-        """
-        x_new = self.get_state() + dx * self.timestep
-        self.update_state(x_new)
-        return
-
-
 
     def PID_controller(self, I, y, y_prev):
         """
@@ -95,8 +49,7 @@ class patient:
         uk = max(uk, 0)
         return uk, Ikp1
 
-
-    def glucose_penalty(self, G = "Default"):
+    def glucose_penalty(self, G = None):
         """
         Calculates penalty given blood glucose.
         p = 1/2 (G - Gbar)**2 + kappa/2 * max(Gmin - G, 0)**2
@@ -109,29 +62,29 @@ class patient:
             Penalty weight
         Gmin : int or float
             Threshold for hypoglycemia
-        G : int or float, default: False
-            Current GLucose. If not set, use current state.
+        G : int, float, np.ndarray, list, default: None
+            Glucose to evaluate penalty for. If not set, use current state.
         
         Returns
         -------
-
         p(G) : float
             Penalty
         """
-        if G == "Default":
+        if G is None: # If G is not specified, use current G
             G = self.G
-        return 1/2 * (G - self.Gbar)**2 + self.kappa/2 * max((self.Gmin - G), 0)**2
+        func = lambda g :  1/2 * (g - self.Gbar)**2 + self.kappa/2 * max((self.Gmin - g), 0)**2
+        if isinstance(G, (np.ndarray, list)):
+            return np.array([func(Gi) for Gi in G])
+        return func(G)
  
-
-
     def bolus_sim(self, bolus, meal_size, meal_idx = 0, iterations = 100, plot = False):
         ds = np.zeros(iterations)
         us = np.ones(iterations) * self.us
         ds[meal_idx] = meal_size / self.timestep # Ingestion 
         us[0] += bolus * 1000 / self.timestep
         states, _ = self.simulate(ds, us)
-        Gt = states[:, 5]
-        p = np.array([self.glucose_penalty(G = G) for G in Gt])
+        Gt = self.get_attr(states, "G")
+        p = self.glucose_penalty(Gt)
         t = self.time_arr(iterations + 1)/60
         phi = simpson(p, x = t)
         if plot:
@@ -247,7 +200,6 @@ class patient:
         fig.tight_layout()
         return
 
-
     def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 75, min_meal = 30, max_meal = 150, n = 50):
         Us = np.linspace(min_U, max_U, n)
         meals = np.linspace(min_meal, max_meal, n)
@@ -329,7 +281,7 @@ def EHM(self, uI, d, uG = 0):
     FR = max(0.003 * (G - 9) * self.VG, 0) 
 
     dx = []
-    dx.append((G - self.GI)/self.TauIG)
+    dx.append((G - self.G)/self.TauIG)
     dx.append(-F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + RA + self.EGP0 * (1 - self.x3) \
         + self.Kglu * self.VG * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
     dx.append(self.x1 * self.Q1 - (self.k12 + self.x2) * self.Q2 + self.alpha * self.E2**2 * self.x1 * self.Q1 \
@@ -349,3 +301,7 @@ def EHM(self, uI, d, uG = 0):
     dx.append(-(fE1/self.Tauin - 1/self.TE) * self.E2 + fE1 * self.TE /(self.c1 + self.c2))
     dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
     return np.array(dx)
+
+p = patient()
+p.simulate(np.zeros(10))
+p.optimal_bolus()
