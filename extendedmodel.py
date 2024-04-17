@@ -4,13 +4,16 @@ import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 
 class patient:
-    def __init__(self, model = "EHM", patient_type = 1,**kwargs):
+    def __init__(self, model = "EHM", patient_type = 1,pancreas_model = "SD",**kwargs):
         self.model = model.upper()
+        self.pancreas_model = pancreas_model.upper()
+        defaults = {}
         with open('config.json', 'r') as f:
-            defaults = json.load(f)
+            data = json.load(f)
+        defaults.update(data["general"])
+        defaults.update(data[self.model])
 
-        with open(f'{self.model}config.json', 'r') as f:
-            defaults.update(json.load(f))
+        #defaults.update(data[self.pancreas_model])
 
         defaults.update(kwargs)
 
@@ -197,12 +200,12 @@ class patient:
         for i,d in enumerate(ds[:-1]):
             dx = self.f_func(u, d)
             self.euler_step(dx)     
-            res[i,:] = self.get_state()
+            res[i+1,:] = self.get_state()
             u, inp = get_u(inp)
             u_list.append(u)
         dx = self.f_func(u, d)
         self.euler_step(dx)     
-        res[i+1, :] = self.get_state()
+        res[i+2, :] = self.get_state()
         return np.array(res), u_list
 
 
