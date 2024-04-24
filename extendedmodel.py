@@ -122,10 +122,15 @@ class patient(ODE):
             Insulin injection rate for each time step
         """
         res = np.empty((len(ds)+1, len(self.state_keys)))
+        #info = dict()
+        #for i in self.state_keys:
+            #info[i]=np.empty(len(ds)+1)
+            #info[i][0]=getattr(self,i)
         res[0, :] = self.get_state()
         inp = 0
         u = self.us
         if isinstance(u_func, (np.ndarray, list)):
+            #info["u"]=np.array(u_func)
             u = u_func[0]
             inp = 1
             def get_u(inp):
@@ -133,6 +138,8 @@ class patient(ODE):
                 return u, inp+1
 
         elif u_func == "PID":
+            #info["u"]=np.empty(len(ds)+1)
+            #info["u"][0]=u
             inp = (0, self.G)
             def get_u(inp):
                 I, y_prev = inp
@@ -154,12 +161,19 @@ class patient(ODE):
             dx = self.f_func(u, d)
             self.euler_step(dx)     
             res[i+1,:] = self.get_state()
+            #for k in self.state_keys:
+                #info[k][i+1]=getattr(self,k)
             u, inp = get_u(inp)
             u_list.append(u)
+            #info["u"][i+1]=u
         dx = self.f_func(u, d)
         self.euler_step(dx)     
         res[i+2, :] = self.get_state()
-        return np.array(res), u_list
+        #for k in self.state_keys:
+            #info[k][i+2]=getattr(self,k)
+        #info["pens"]=self.glucose_penalty(info["G"])
+        
+        return np.array(res), u_list, #info
 
 
 
