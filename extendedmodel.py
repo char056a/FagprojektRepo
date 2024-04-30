@@ -173,7 +173,7 @@ class patient(ODE):
             info[k][i+2]=getattr(self,k)
         info["pens"]=self.glucose_penalty(info["G"])
         
-        return np.array(res), u_list, #info
+        return np.array(res), u_list, info
 
 
 
@@ -323,7 +323,7 @@ def statePlot(self,infodict,shape,size,keylist):
     Parameters
     ----------
 
-    infodict: Dictionary of all states/disturbances from a given simulation
+    infodict: Dictionary of all states/disturbances that could possibly be plotted  from a given simulation
 
     shape: tuple or list indicating layout of plots ("number of rows", "number of columns")
 
