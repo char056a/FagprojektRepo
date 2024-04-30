@@ -317,9 +317,11 @@ def EHM(self, uI, d, uG = 0):
     return np.array(dx)
 
 def statePlot(self,infodict,shape,size,keylist):
+
+
     fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
     ax=ax.flatten()
-    collist=["#0B31A5","#D3004C","#107C10"]
+    colorlist=["#0B31A5","#D3004C","#107C10"]
     titles={
         "MVP":{
         "D1":["D2","[mmol]"],
@@ -351,14 +353,16 @@ def statePlot(self,infodict,shape,size,keylist):
     }
     
     for i,l in enumerate(keylist):
-            string=""
+            title=""
             for c, k in enumerate(l):
-                string+=titles["MVP"][k][0]
-                if c!=(len(l)-1):
-                    string+=" and "
+                if c!=(len(l)-1) or c==0:
+                    title+=titles[self.model][k][0]
+                else:
+                    title+= " and " + titles[self.model][k][0]
+
                 t_vals=self.timestep*np.arange(len(infodict[k]))
-                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=collist[c])
-                ax[i].set_title(string + " over time")
+                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=colorlist[c])
+                ax[i].set_title(title + " over time")
                 ax[i].set_xlabel("Time [h]")
                 ax[i].set_ylabel(titles[self.model][k][1])
                 if k=="G":
