@@ -316,6 +316,56 @@ def EHM(self, uI, d, uG = 0):
     dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
     return np.array(dx)
 
+def statePlot(self,infodict,shape,size,keylist):
+    fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
+    ax=ax.flatten()
+    collist=["#0B31A5","#D3004C","#107C10"]
+    titles={
+        "MVP":{
+        "D1":["D2","[mmol]"],
+        "D2":["D2","[mmol]"],
+        "Isc": ["Subc. insulin","[mU/L]"],
+        "Ip" : ["Insulin in plasma","[mU/L]"],
+        "Ieff": ["Effective insulin","[mU/L]"],
+        "G" : ["Blood glucose","[mmol/L]"],
+        "Gsc": ["Subc. glucose","[mmol/L]"]
+        },
+
+        "EHM": {
+        "G" : ["Blood Glucose","[mmol/L]"],
+        "Q1" : ["Main bloodstream glucose","[mmol]"],
+        "Q2" : ["Glucose in peripheral tissue","[mmol]"],
+        "S1" : ["Subc. insulin variable 1","[mU]"],
+        "S2" : ["Subc. insulin variable 2","[mU]"],
+        "I"  : ["Plasma insulin conc.","[mU/L]"],
+        "x1": ["Insulin effect on glucose distrib/transp","[1/min]"],
+        "x2": ["Insulin effect on glucose disposal","[1/min]"],
+        "x3": ["Insulin effect on endogenous glucose prod","[1/min]"],
+        "D1": ["Meal Glucose 1","[mmol]"],
+        "D2": ["Meal Glucose 2","[mmol]"],
+        "Z1": ["Subc. Glucagon","[μg]"],
+        "Z2": ["plasma Glucagon","[μg]"],
+        "E1": ["Short-term exercise eff.","[min]"],
+        "E2": ["Long-term exercise eff.","[min]"]
+        }
+    }
+    for i,l in enumerate(keylist):
+            string=""
+            for c, k in enumerate(l):
+                string+=titles["MVP"][k][0]
+                if c!=(len(l)-1):
+                    string+=" and "
+                t_vals=self.timestep*np.arange(len(infodict[k]))
+                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=collist[c])
+                ax[i].set_title(string + " over time")
+                ax[i].set_xlabel("Time [h]")
+                ax[i].set_ylabel(titles[self.model][k][1])
+                if k=="G":
+                    ax[i].plot(mainsim.t_vals/60,4.44*np.ones(len(mainsim.t_vals)),"--",color="#998F85",label="minimum glucose")
+            ax[i].legend()
+    plt.show()
+    return
+
 p = patient()
 p.simulate(np.zeros(10))
 p.optimal_bolus()
