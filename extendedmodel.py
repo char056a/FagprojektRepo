@@ -332,7 +332,7 @@ def statePlot(self,infodict,shape,size,keylist):
     keylist: A list of lists in row-major order of where to put each plot. 
     
     For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
-    Creates a will plot D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a 3 figure, in a 1 X 3 layout.  
+    Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
 
 
     Returns
@@ -353,7 +353,8 @@ def statePlot(self,infodict,shape,size,keylist):
         "Ip" : ["Insulin in plasma","[mU/L]"],
         "Ieff": ["Effective insulin","[mU/L]"],
         "G" : ["Blood glucose","[mmol/L]"],
-        "Gsc": ["Subc. glucose","[mmol/L]"]
+        "Gsc": ["Subc. glucose","[mmol/L]"], 
+        "pens": ["Penalty function", " "]
         },
 
         "EHM": {
@@ -371,7 +372,8 @@ def statePlot(self,infodict,shape,size,keylist):
         "Z1": ["Subc. Glucagon","[μg]"],
         "Z2": ["plasma Glucagon","[μg]"],
         "E1": ["Short-term exercise eff.","[min]"],
-        "E2": ["Long-term exercise eff.","[min]"]
+        "E2": ["Long-term exercise eff.","[min]"],
+        "pens": ["Penalty function", " "]
         }
     }
     
