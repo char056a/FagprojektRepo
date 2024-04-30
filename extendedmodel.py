@@ -318,6 +318,29 @@ def EHM(self, uI, d, uG = 0):
 
 def statePlot(self,infodict,shape,size,keylist):
 
+    """ 
+    Makes plot of different states. 
+    Parameters
+    ----------
+
+    infodict: Dictionary of all states/disturbances from a given simulation
+
+    shape: tuple or list indicating layout of plots ("number of rows", "number of columns")
+
+    size: tuple of list indicating size of figure ("length", "width")
+
+    keylist: A list of lists in row-major order of where to put each plot. 
+    
+    For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
+    Creates a will plot D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a 3 figure, in a 1 X 3 layout.  
+
+
+    Returns
+    -------
+
+    plots of given states
+    """
+
 
     fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
     ax=ax.flatten()
