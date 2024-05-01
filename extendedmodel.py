@@ -130,7 +130,6 @@ class patient(ODE):
         inp = 0
         u = self.us
         if isinstance(u_func, (np.ndarray, list)):
-            info["u"]=np.array(u_func)
             u = u_func[0]
             inp = 1
             def get_u(inp):
@@ -138,8 +137,6 @@ class patient(ODE):
                 return u, inp+1
 
         elif u_func == "PID":
-            info["u"]=np.empty(len(ds)+1)
-            info["u"][0]=u
             inp = (0, self.G)
             def get_u(inp):
                 I, y_prev = inp
@@ -172,6 +169,7 @@ class patient(ODE):
         for k in self.state_keys:
             info[k][i+2]=getattr(self,k)
         info["pens"]=self.glucose_penalty(info["G"])
+        info["u"]=np.array(u_list)
         
         return np.array(res), u_list, info
 
