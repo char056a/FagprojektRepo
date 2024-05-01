@@ -92,14 +92,14 @@ class PID(ODE):
         super().__init__(data)
 
     def eval(self,y):
-        dy = (y - self.yprev)/self.timestep # approx derivative of y
-        ek = y - self.ybar # error
+        dy = (y - self.yprev)/self.timestep
+        ek = y - self.ybar
 
-        P = self.Kp * ek
-        dI = P/self.Ti
+        P = self.Kp * ek 
+        dI = P/self.Ti # 
         D = self.Kp * self.Td * dy
 
-        res = max(P + self.I + D, 0)
+        res = P + self.I + D
 
         self.yprev = y 
         self.I += dI * self.timestep # Updates integral term

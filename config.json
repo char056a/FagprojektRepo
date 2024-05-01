@@ -2,13 +2,16 @@
     "general" : {
     "timestep": 5,
 
-    "Kp": 0.25,
+
+    "Kp": 0.015,
     "Ti": 500,
-    "Td": 15, 
+    "Td": 25, 
     "Gbar": 6,
     "Gmin" : 3.889,
     "us": 25.1,
-    "kappa" : 10e+6
+    "kappa" : 10e+6,
+
+    "W" : 0.75
     },
     "MVP" :   {
             "state_keys" : ["D1", "D2", "Isc", "Ip", "Ieff", "G", "Gsc"],
