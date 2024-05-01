@@ -10,7 +10,7 @@ class PKPM(ODE):
         defaults.update(kwargs)
         super().__init__(defaults)
 
-    def eval(self, G):
+    def ode(self, G):
         if G <= self.Gu: # if glucose is low
             f = self.fb
             alpha2 = 0
@@ -22,7 +22,6 @@ class PKPM(ODE):
                 alpha2 = self.hhat * (G - self.Gu)/(G - self.Gu) 
             else: # if glucose is above the upper level
                 alpha2 = self.hhat
-
         # ode
         dM = self.alpha1[idx] - self.delta1[idx] * self.M
         dP = self.v[idx] * self.M - self.delta2 * self.P - self.k * self.P * self.rho * self.DIR
@@ -33,6 +32,11 @@ class PKPM(ODE):
         drho = self.zeta * (-self.rho + self.rhob + self.krho * (self.gamma - self.gammab))
         
         dx = np.array([dM, dP, dR, dgamma, dD, dDIR, drho])
+        return dx
+
+
+    def eval(self, G):
+        dx = self.ode(G)
         ISR = max(self.I0 * self.rho * self.DIR * f * self.N,0) # do not let isr be negative
         x_new = dx * self.timestep + self.get_state()
         self.update_state(x_new)
