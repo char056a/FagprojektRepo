@@ -6,8 +6,10 @@ from scipy.integrate import simpson
 class MVPmodel:
     def __init__(self,**kwargs):
         with open('MVPconfig.json', 'r') as f:
-            defaults = json.load(f)
-        
+            data = json.load(f)
+        defaults.update(data["general"])
+        defaults.update(data["MVP"])
+
         defaults.update(kwargs)
         
         for key, value in defaults.items():
