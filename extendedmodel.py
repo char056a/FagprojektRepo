@@ -329,14 +329,15 @@ def statePlot(self,infodict,shape,size,keylist):
 
     keylist: A list of lists in row-major order of where to put each plot. 
     
-    For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
-    Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
-
-
     Returns
     -------
 
     plots of given states
+
+    Example
+    -------
+    For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
+    Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
     """
 
 
