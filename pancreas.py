@@ -32,12 +32,19 @@ class PKPM(ODE):
         drho = self.zeta * (-self.rho + self.rhob + self.krho * (self.gamma - self.gammab))
         
         dx = np.array([dM, dP, dR, dgamma, dD, dDIR, drho])
-        return dx
+        ISR = self.get_ISR(f)
+        return dx, ISR
 
+    def get_ISR(self, f, **kwargs):
+        I0 = kwargs.get("I0", self.I0)
+        rho = kwargs.get("rho", self.rho)
+        DIR = kwargs.get("DIR", self.DIR)
+        N = kwargs.get("N", self.N)
+
+        return max(I0 * rho * DIR * f * N,0) # do not let isr be negative
 
     def eval(self, G):
-        dx = self.ode(G)
-        ISR = max(self.I0 * self.rho * self.DIR * f * self.N,0) # do not let isr be negative
+        dx, ISR = self.ode(G)
         x_new = dx * self.timestep + self.get_state()
         self.update_state(x_new)
         return ISR
