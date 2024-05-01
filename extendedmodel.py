@@ -122,6 +122,10 @@ class patient(ODE):
             Insulin injection rate for each time step
         """
         res = np.empty((len(ds)+1, len(self.state_keys)))
+        info = dict()
+        for i in self.state_keys:
+            info[i]=np.empty(len(ds)+1)
+            info[i][0]=getattr(self,i)
         res[0, :] = self.get_state()
         inp = 0
         u = self.us
@@ -154,12 +158,20 @@ class patient(ODE):
             dx = self.f_func(u, d)
             self.euler_step(dx)     
             res[i+1,:] = self.get_state()
+            for k in self.state_keys:
+                info[k][i+1]=getattr(self,k)
             u, inp = get_u(inp)
             u_list.append(u)
+            info["u"][i+1]=u
         dx = self.f_func(u, d)
         self.euler_step(dx)     
         res[i+2, :] = self.get_state()
-        return np.array(res), u_list
+        for k in self.state_keys:
+            info[k][i+2]=getattr(self,k)
+        info["pens"]=self.glucose_penalty(info["G"])
+        info["u"]=np.array(u_list)
+        
+        return np.array(res), u_list, info
 
 
 
@@ -301,6 +313,86 @@ def EHM(self, uI, d, uG = 0):
     dx.append(-(fE1/self.Tauin - 1/self.TE) * self.E2 + fE1 * self.TE /(self.c1 + self.c2))
     dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
     return np.array(dx)
+
+def statePlot(self,infodict,shape,size,keylist):
+
+    """ 
+    Makes plot of different states. 
+    Parameters
+    ----------
+
+    infodict: Dictionary of all states/disturbances that could possibly be plotted  from a given simulation
+
+    shape: tuple or list indicating layout of plots ("number of rows", "number of columns")
+
+    size: tuple of list indicating size of figure ("length", "width")
+
+    keylist: A list of lists in row-major order of where to put each plot. 
+    
+    For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
+    Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
+
+
+    Returns
+    -------
+
+    plots of given states
+    """
+
+
+    fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
+    ax=ax.flatten()
+    colorlist=["#0B31A5","#D3004C","#107C10"]
+    titles={
+        "MVP":{
+        "D1":["D2","[mmol]"],
+        "D2":["D2","[mmol]"],
+        "Isc": ["Subc. insulin","[mU/L]"],
+        "Ip" : ["Insulin in plasma","[mU/L]"],
+        "Ieff": ["Effective insulin","[mU/L]"],
+        "G" : ["Blood glucose","[mmol/L]"],
+        "Gsc": ["Subc. glucose","[mmol/L]"], 
+        "pens": ["Penalty function", " "]
+        },
+
+        "EHM": {
+        "G" : ["Blood Glucose","[mmol/L]"],
+        "Q1" : ["Main bloodstream glucose","[mmol]"],
+        "Q2" : ["Glucose in peripheral tissue","[mmol]"],
+        "S1" : ["Subc. insulin variable 1","[mU]"],
+        "S2" : ["Subc. insulin variable 2","[mU]"],
+        "I"  : ["Plasma insulin conc.","[mU/L]"],
+        "x1": ["Insulin effect on glucose distrib/transp","[1/min]"],
+        "x2": ["Insulin effect on glucose disposal","[1/min]"],
+        "x3": ["Insulin effect on endogenous glucose prod","[1/min]"],
+        "D1": ["Meal Glucose 1","[mmol]"],
+        "D2": ["Meal Glucose 2","[mmol]"],
+        "Z1": ["Subc. Glucagon","[μg]"],
+        "Z2": ["plasma Glucagon","[μg]"],
+        "E1": ["Short-term exercise eff.","[min]"],
+        "E2": ["Long-term exercise eff.","[min]"],
+        "pens": ["Penalty function", " "]
+        }
+    }
+    
+    for i,l in enumerate(keylist):
+            title=""
+            for c, k in enumerate(l):
+                if c!=(len(l)-1) or c==0:
+                    title+=titles[self.model][k][0]
+                else:
+                    title+= " and " + titles[self.model][k][0]
+
+                t_vals=self.timestep*np.arange(len(infodict[k]))
+                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=colorlist[c])
+                ax[i].set_title(title + " over time")
+                ax[i].set_xlabel("Time [h]")
+                ax[i].set_ylabel(titles[self.model][k][1])
+                if k=="G":
+                    ax[i].plot(mainsim.t_vals/60,4.44*np.ones(len(mainsim.t_vals)),"--",color="#998F85",label="minimum glucose")
+            ax[i].legend()
+    plt.show()
+    return
 
 p = patient()
 p.simulate(np.zeros(10))
