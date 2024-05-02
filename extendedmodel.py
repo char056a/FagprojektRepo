@@ -170,6 +170,8 @@ class patient(ODE):
             info[k][i+2]=getattr(self,k)
         info["pens"]=self.glucose_penalty(info["G"])
         info["u"]=np.array(u_list)
+        info["t"]=self.time_arr(self,len(info["pens"]))
+
         
         return np.array(res), u_list, info
 
@@ -384,8 +386,7 @@ def statePlot(self,infodict,shape,size,keylist):
                 else:
                     title+= " and " + titles[self.model][k][0]
 
-                t_vals=self.timestep*np.arange(len(infodict[k]))
-                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=colorlist[c])
+                ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
                 ax[i].set_title(title + " over time")
                 ax[i].set_xlabel("Time [h]")
                 ax[i].set_ylabel(titles[self.model][k][1])
