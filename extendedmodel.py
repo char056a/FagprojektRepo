@@ -316,7 +316,7 @@ class Patient(ODE):
 
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
-    def statePlot(self,infodict,shape,size,keylist):
+    def statePlot(self,infodict,shape,size,keylist,fontsize):
 
         """ 
         Makes plot of different states. 
@@ -365,9 +365,9 @@ class Patient(ODE):
             "S1" : ["Subc. insulin variable 1","[mU]"],
             "S2" : ["Subc. insulin variable 2","[mU]"],
             "I"  : ["Plasma insulin conc.","[mU/L]"],
-            "x1": ["Insulin effect on glucose distrib/transp","[1/min]"],
-            "x2": ["Insulin effect on glucose disposal","[1/min]"],
-            "x3": ["Insulin effect on endogenous glucose prod","[1/min]"],
+            "x1": ["I effect on gluc distrib/transp","[1/min]"],
+            "x2": ["I effect on gluc disposal","[1/min]"],
+            "x3": ["I effect on endogenous gluc prod","[1/min]"],
             "D1": ["Meal Glucose 1","[mmol]"],
             "D2": ["Meal Glucose 2","[mmol]"],
             "Z1": ["Subc. Glucagon","[μg]"],
@@ -390,7 +390,7 @@ class Patient(ODE):
                     if k=="G":
                         ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
                     ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
-                    ax[i].set_title(title + " over time")
+                    ax[i].set_title(title, fontsize=fontsize)
                     ax[i].set_xlabel("Time [h]")
                     ax[i].set_ylabel(titles[self.model][k][1])
                     ax[i].set_xlim(0,infodict["t"][-1]/60)
@@ -411,4 +411,5 @@ print(p)
 print(p.f_func())
 p.pump(p.G)
 info=p.simulate()
+p.statePlot(info, (1,3), (20,20) , [["D1","D2"],["I"],["x1","x2","x3"]],7)
 #p.optimal_bolus()
