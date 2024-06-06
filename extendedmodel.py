@@ -333,92 +333,95 @@ class Patient(ODE):
 
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
+    def statePlot(self,infodict,shape,size,keylist):
 
-"""
-def statePlot(self,infodict,shape,size,keylist):
+        """ 
+        Makes plot of different states. 
+        Parameters
+        ----------
 
-    /"/"/" 
-    Makes plot of different states. 
-    Parameters
-    ----------
+        infodict: Dictionary of all states/disturbances that could possibly be plotted  from a given simulation
 
-    infodict: Dictionary of all states/disturbances that could possibly be plotted  from a given simulation
+        shape: tuple or list indicating layout of plots ("number of rows", "number of columns")
 
-    shape: tuple or list indicating layout of plots ("number of rows", "number of columns")
+        size: tuple of list indicating size of figure ("length", "width")
 
-    size: tuple of list indicating size of figure ("length", "width")
+        keylist: A list of lists in row-major order of where to put each plot. 
+        
+        Returns
+        -------
 
-    keylist: A list of lists in row-major order of where to put each plot. 
-    
-    Returns
-    -------
+        plots of given states
 
-    plots of given states
-
-    Example
-    -------
-    For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
-    Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
-    /"/"/"
+        Example
+        -------
+        For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
+        Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
+        """
 
 
-    fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
-    ax=ax.flatten()
-    colorlist=["#0B31A5","#D3004C","#107C10"]
-    titles={
-        "MVP":{
-        "D1":["D2","[mmol]"],
-        "D2":["D2","[mmol]"],
-        "Isc": ["Subc. insulin","[mU/L]"],
-        "Ip" : ["Insulin in plasma","[mU/L]"],
-        "Ieff": ["Effective insulin","[mU/L]"],
-        "G" : ["Blood glucose","[mmol/L]"],
-        "Gsc": ["Subc. glucose","[mmol/L]"], 
-        "pens": ["Penalty function", " "]
-        },
+        fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
+        ax=ax.flatten()
+        colorlist=["#0B31A5","#D3004C","#107C10"]
+        titles={
+            "MVP":{
+            "D1":["D2","[mmol]"],
+            "D2":["D2","[mmol]"],
+            "Isc": ["Subc. insulin","[mU/L]"],
+            "Ip" : ["Insulin in plasma","[mU/L]"],
+            "Ieff": ["Effective insulin","[mU/L]"],
+            "G" : ["Blood glucose","[mmol/L]"],
+            "Gsc": ["Subc. glucose","[mmol/L]"], 
+            "pens": ["Penalty function", " "]
+            },
 
-        "EHM": {
-        "G" : ["Blood Glucose","[mmol/L]"],
-        "Q1" : ["Main bloodstream glucose","[mmol]"],
-        "Q2" : ["Glucose in peripheral tissue","[mmol]"],
-        "S1" : ["Subc. insulin variable 1","[mU]"],
-        "S2" : ["Subc. insulin variable 2","[mU]"],
-        "I"  : ["Plasma insulin conc.","[mU/L]"],
-        "x1": ["Insulin effect on glucose distrib/transp","[1/min]"],
-        "x2": ["Insulin effect on glucose disposal","[1/min]"],
-        "x3": ["Insulin effect on endogenous glucose prod","[1/min]"],
-        "D1": ["Meal Glucose 1","[mmol]"],
-        "D2": ["Meal Glucose 2","[mmol]"],
-        "Z1": ["Subc. Glucagon","[μg]"],
-        "Z2": ["plasma Glucagon","[μg]"],
-        "E1": ["Short-term exercise eff.","[min]"],
-        "E2": ["Long-term exercise eff.","[min]"],
-        "pens": ["Penalty function", " "]
+            "EHM": {
+            "G" : ["Blood Glucose","[mmol/L]"],
+            "Q1" : ["Main bloodstream glucose","[mmol]"],
+            "Q2" : ["Glucose in peripheral tissue","[mmol]"],
+            "S1" : ["Subc. insulin variable 1","[mU]"],
+            "S2" : ["Subc. insulin variable 2","[mU]"],
+            "I"  : ["Plasma insulin conc.","[mU/L]"],
+            "x1": ["Insulin effect on glucose distrib/transp","[1/min]"],
+            "x2": ["Insulin effect on glucose disposal","[1/min]"],
+            "x3": ["Insulin effect on endogenous glucose prod","[1/min]"],
+            "D1": ["Meal Glucose 1","[mmol]"],
+            "D2": ["Meal Glucose 2","[mmol]"],
+            "Z1": ["Subc. Glucagon","[μg]"],
+            "Z2": ["plasma Glucagon","[μg]"],
+            "E1": ["Short-term exercise eff.","[min]"],
+            "E2": ["Long-term exercise eff.","[min]"],
+            "pens": ["Penalty function", " "]
+            }
         }
-    }
-    
-    for i,l in enumerate(keylist):
-            title=""
-            for c, k in enumerate(l):
-                if c!=(len(l)-1) or c==0:
-                    title+=titles[self.model][k][0]
-                else:
-                    title+= " and " + titles[self.model][k][0]
+        
+        for i,l in enumerate(keylist):
+                title=""
+                for c, k in enumerate(l):
+                    if c!=(len(l)-1) or c==0:
+                        title+=titles[self.model][k][0]
+                    else:
+                        title+= " and " + titles[self.model][k][0]
 
-                ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
-                ax[i].set_title(title + " over time")
-                ax[i].set_xlabel("Time [h]")
-                ax[i].set_ylabel(titles[self.model][k][1])
-                if k=="G":
-                    ax[i].plot(mainsim.t_vals/60,4.44*np.ones(len(mainsim.t_vals)),"--",color="#998F85",label="minimum glucose")
-            ax[i].legend()
-    plt.show()
-    return
-"""
+                    ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
+                    ax[i].set_title(title + " over time")
+                    ax[i].set_xlabel("Time [h]")
+                    ax[i].set_ylabel(titles[self.model][k][1])
+                    if k=="G":
+                        ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
+                ax[i].legend()
+        plt.show()
+        return
+
+
+
+
 p = Patient(1, "EHM")
 p.simulate()["G"]
 p.get_state()
 print(p)
 print(p.f_func())
 p.pump(p.G)
+info=p.simulate()
+p.statePlot(info,shape=(1,2),size=(20,20),keylist=[["G"],["I"]])
 #p.optimal_bolus()
