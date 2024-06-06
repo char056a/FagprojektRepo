@@ -360,8 +360,8 @@ class Patient(ODE):
 
             "EHM": {
             "G" : ["Blood Glucose","[mmol/L]"],
-            "Q1" : ["Main bloodstream glucose","[mmol]"],
-            "Q2" : ["Glucose in peripheral tissue","[mmol]"],
+            "Q1" : ["Main bloods gluc","[mmol]"],
+            "Q2" : ["Gluc in peripheral tissue","[mmol]"],
             "S1" : ["Subc. insulin variable 1","[mU]"],
             "S2" : ["Subc. insulin variable 2","[mU]"],
             "I"  : ["Plasma insulin conc.","[mU/L]"],
@@ -405,11 +405,10 @@ class Patient(ODE):
 p = Patient(1, "EHM")
 info = p.simulate()
 print(info["I"])
-p.statePlot(info,(1,5), (10,2),  [["I"],["Q1", "Q2"],["x1","x2","x3"],["D1","D2"],["G"]])
+p.statePlot(info,(1,4), (40,20),  [["I"],["Q1", "Q2"],["D1","D2"],["G"]],7)
 p.get_state()
 print(p)
 print(p.f_func())
 p.pump(p.G)
 info=p.simulate()
-p.statePlot(info, (1,3), (20,20) , [["D1","D2"],["I"],["x1","x2","x3"]],7)
 #p.optimal_bolus()
