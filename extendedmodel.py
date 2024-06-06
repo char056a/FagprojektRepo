@@ -64,13 +64,13 @@ def EHM(self, d = 0, uI = 0, uP = 0, HR = None):
     dx = []
     dx.append((G - self.G)/self.TauIG)
     dx.append(-F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + RA + self.BW * self.EGP0 * (1 - self.x3) \
-        + self.Kglu * self.VG * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
+        + self.Kglu * self.VG * self.BW * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
     dx.append(self.x1 * self.Q1 - (self.k12 + self.x2) * self.Q2 + self.alpha * self.E2**2 * self.x1 * self.Q1 \
         - self.alpha * self.E2**2 * self.x2 * self.Q2 - self.beta * self.E1 / self.HR0)
 
     dx.append(uI - self.S1 / self.TauS)
     dx.append((self.S1 - self.S2)/self.TauS)
-    dx.append(uP / self.VI * self.BW + self.S2 / (self.VI * self.BW * self.TauS) - self.ke * self.I) # Den her kan være wack
+    dx.append(uP / (self.VI * self.BW) + self.S2 / (self.VI * self.BW * self.TauS) - self.ke * self.I) # Den her kan være wack
     dx.append(self.kb1 * self.I - self.ka1 * self.x1)
     dx.append(self.kb2 * self.I - self.ka2 * self.x2)
     dx.append(self.kb3 * self.I - self.ka3 * self.x3)
@@ -194,7 +194,7 @@ class Patient(ODE):
         return phi, p, Gt
 
 
-    def simulate(self, uIs = None, uPs = None, ds = None, HRs = None, iterations = None):
+    def simulate(self, ds = None, uIs = None, uPs = None, HRs = None, iterations = None):
         """
         Simulates patient.
 
@@ -259,7 +259,6 @@ class Patient(ODE):
             #uI = self.pump(self.G)
             uP = uP_func(i)
             uI = uI_func(i)
-            print(uP, uI)
             dx = self.f_func(d = d, uI = uI, uP = uP, HR = HR)
             print(dx)
             self.euler_step(dx)     
@@ -406,8 +405,7 @@ def statePlot(self,infodict,shape,size,keylist):
                 else:
                     title+= " and " + titles[self.model][k][0]
 
-                t_vals=self.timestep*np.arange(len(infodict[k]))
-                ax[i].plot(t_vals/60,infodict[k],".",label=k,color=colorlist[c])
+                ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
                 ax[i].set_title(title + " over time")
                 ax[i].set_xlabel("Time [h]")
                 ax[i].set_ylabel(titles[self.model][k][1])
@@ -417,8 +415,10 @@ def statePlot(self,infodict,shape,size,keylist):
     plt.show()
     return
 """
-p = Patient(1)
-p.simulate(np.zeros(10))["uI"]
+p = Patient(1, "EHM")
+p.simulate()["G"]
 p.get_state()
+print(p)
+print(p.f_func())
 p.pump(p.G)
 #p.optimal_bolus()
