@@ -3,27 +3,120 @@ import json
 import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 from odeclass import ODE
+import pancreas
 
-class patient(ODE):
-    def __init__(self, model = "EHM", patient_type = 1, pancreas_model = "SD",**kwargs):
+def MVP(self, u, d):
+    """
+    Solves dx = f(x, u, d)
+
+    Parameters
+    ----------
+    u : int or float 
+        Insulin injection rate.
+    d : int or float 
+        Meal ingestion rate.
+    
+    Returns
+    -------
+    dx : numpy array
+        Solution to system of differential equations. 
+    """
+    dD1 = d - self.D1/self.taum
+    dD2 = (self.D1 - self.D2)/self.taum
+    dIsc = u/(self.tau1 * self.C1) - self.Isc/self.tau1
+    dIp = (self.Isc - self.Ip)/self.tau2
+    dIeff = -self.p2 * self.Ieff + self.p2 * self.S1 * self.Ip
+    dG = - (self.gezi + self.Ieff) * self.G + self.egp0 + 1000 * self.D2 / (self.Vg * self.taum)
+    dGsc = (self.G - self.Gsc) / self.timestep
+
+    dx = np.array([dD1, dD2, dIsc, dIp, dIeff, dG, dGsc])
+    return dx
+
+
+
+def EHM(self, d = 0, uI = 0, uP = 0, HR = None):
+    """
+    Solves dx = f(x, u, d)
+
+    Parameters
+    ----------
+    u : int or float 
+        Insulin injection rate.
+    d : int or float 
+        Meal ingestion rate.
+    
+    Returns
+    -------
+    dx : numpy array
+        Solution to system of differential equations. 
+    """
+    G = self.Q1/(self.VG * self.BW)
+    RA = self.f*self.D2/self.TauD
+    D = 1000 * d/self.MwG
+    if HR is None:
+        HRmax = 220 - self.age
+        HR = self.HRR * (HRmax - self.HR0) + self.HR0
+    fE1x = (self.E1/(self.a * self.HR0))**self.n
+    fE1 = fE1x/(1+fE1x)
+    F01c = min(self.F01, self.F01 * G / 4.5) * self.BW
+    FR = max(0.003 * (G - 9) * self.VG * self.BW, 0) 
+
+    dx = []
+    dx.append((G - self.G)/self.TauIG)
+    dx.append(-F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + RA + self.BW * self.EGP0 * (1 - self.x3) \
+        + self.Kglu * self.VG * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
+    dx.append(self.x1 * self.Q1 - (self.k12 + self.x2) * self.Q2 + self.alpha * self.E2**2 * self.x1 * self.Q1 \
+        - self.alpha * self.E2**2 * self.x2 * self.Q2 - self.beta * self.E1 / self.HR0)
+
+    dx.append(uI - self.S1 / self.TauS)
+    dx.append((self.S1 - self.S2)/self.TauS)
+    dx.append(uP / self.VI * self.BW + self.S2 / (self.VI * self.BW * self.TauS) - self.ke * self.I) # Den her kan være wack
+    dx.append(self.kb1 * self.I - self.ka1 * self.x1)
+    dx.append(self.kb2 * self.I - self.ka2 * self.x2)
+    dx.append(self.kb3 * self.I - self.ka3 * self.x3)
+    dx.append(self.AG * D - self.D1 / self.TauD)
+    dx.append((self.D1 - self.D2)/self.TauD)
+    dx.append(- self.Z1 / self.Tauglu)
+    dx.append((self.Z1 - self.Z2)/self.Tauglu)
+    dx.append((HR - self.HR0 - self.E1)/self.TauHR)
+    dx.append(-(fE1/self.Tauin - 1/self.TE) * self.E2 + fE1 * self.TE /(self.c1 + self.c2))
+    dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
+    return np.array(dx)
+
+
+
+class Patient(ODE):
+    def __init__(self, patient_type, model = "EHM", **kwargs):
         self.model = model.upper()
-        self.pancreas_model = pancreas_model.upper()
-
-        defaults = {}
+        
+        defaults = {} #tomt dictionary 
         with open('config.json', 'r') as f:
-            data = json.load(f)
-        defaults.update(data["general"])
-        defaults.update(data[self.model])
-        #defaults.update(data[self.pancreas_model])
-        defaults.update(kwargs) 
+            data = json.load(f) #læs json-fil
+        defaults.update(data["general"]) #tilføj "general" til dictionary(defaults)
+        defaults.update(data[self.model]) #tilføj modelegenskaberne til dictionary(defaults)
+        defaults.update(kwargs) #tilføj keywordarguments til dictionary(defaults)
 
-        super().__init__(defaults) # initialises patient object with attributes and methods of ODE class
-
-        # sets function to compute derivative of state
-        if self.model == "EHM":
-            self.f_func = lambda *args : EHM(self, *args)
+        super().__init__(defaults)
         if self.model == "MVP":
-            self.f_func = lambda *args : MVP(self, *args)
+            self.f_func = lambda **kwargs: MVP(self,**kwargs) #caller MVP-modellen
+        else:
+            self.f_func = lambda **kwargs: EHM(self,**kwargs) #caller EHM-modellen
+
+        if patient_type != 1:
+            self.pancreasObj = pancreas.PKPM(timestep=self.timestep, Gbar=self.Gbar)
+        if patient_type != 0:
+            self.pumpObj = pancreas.PID(Kp = self.Kp, Td = self.Td, Ti = self.Ti, ybar = self.Gbar, timestep=self.timestep)
+            
+        if patient_type == 0:
+            self.pancreas = lambda G : self.pancreasObj.eval(G)
+            self.pump = lambda G : 0
+        if patient_type == 1:
+            self.pancreas = lambda G : 0
+            self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
+        if patient_type == 2:
+            self.pancreas = lambda G : self.W * self.pancreasObj(G)
+            self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
+     
             
 
     def PID_controller(self, I, y, y_prev):
@@ -236,84 +329,6 @@ class patient(ODE):
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
 
-
-
-def MVP(self, u, d):
-    """
-    Solves dx = f(x, u, d)
-
-    Parameters
-    ----------
-    u : int or float 
-        Insulin injection rate.
-    d : int or float 
-        Meal ingestion rate.
-    
-    Returns
-    -------
-    dx : numpy array
-        Solution to system of differential equations. 
-    """
-    dD1 = d - self.D1/self.taum
-    dD2 = (self.D1 - self.D2)/self.taum
-    dIsc = u/(self.tau1 * self.C1) - self.Isc/self.tau1
-    dIp = (self.Isc - self.Ip)/self.tau2
-    dIeff = -self.p2 * self.Ieff + self.p2 * self.S1 * self.Ip
-    dG = - (self.gezi + self.Ieff) * self.G + self.egp0 + 1000 * self.D2 / (self.Vg * self.taum)
-    dGsc = (self.G - self.Gsc) / self.timestep
-
-    dx = np.array([dD1, dD2, dIsc, dIp, dIeff, dG, dGsc])
-    return dx
-
-
-def EHM(self, uI, d, uG = 0):
-    """
-    Solves dx = f(x, u, d)
-
-    Parameters
-    ----------
-    u : int or float 
-        Insulin injection rate.
-    d : int or float 
-        Meal ingestion rate.
-    
-    Returns
-    -------
-    dx : numpy array
-        Solution to system of differential equations. 
-    """
-    G = self.Q1/self.VG
-    RA = self.f*self.D2/self.TauD
-    D = 1000 * d/self.MwG
-    HRmax = 220 - self.age
-    HR = self.HRR * (HRmax - self.HR0) + self.HR0
-    fE1x = self.E1/(self.a * self.HR0)**self.n
-    fE1 = fE1x/(1+fE1x)
-    F01c = min(self.F01, self.F01 * G / 4.5)
-    FR = max(0.003 * (G - 9) * self.VG, 0) 
-
-    dx = []
-    dx.append((G - self.G)/self.TauIG)
-    dx.append(-F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + RA + self.EGP0 * (1 - self.x3) \
-        + self.Kglu * self.VG * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
-    dx.append(self.x1 * self.Q1 - (self.k12 + self.x2) * self.Q2 + self.alpha * self.E2**2 * self.x1 * self.Q1 \
-        - self.alpha * self.E2**2 * self.x2 * self.Q2 - self.beta * self.E1 / self.HR0)
-
-    dx.append(uI - self.S1 / self.TauS)
-    dx.append((self.S1 - self.S2)/self.TauS)
-    dx.append(self.S2 / (self.VI * self.TauS) - self.ke * self.I)
-    dx.append(self.kb1 * self.I - self.ka1 * self.x1)
-    dx.append(self.kb2 * self.I - self.ka2 * self.x2)
-    dx.append(self.kb3 * self.I - self.ka3 * self.x3)
-    dx.append(self.AG * D - self.D1 / self.TauD)
-    dx.append((self.D1 - self.D2)/self.TauD)
-    dx.append(uG - self.Z1 / self.Tauglu)
-    dx.append((self.Z1 - self.Z2)/self.Tauglu)
-    dx.append((HR - self.HR0 - self.E1)/self.TauHR)
-    dx.append(-(fE1/self.Tauin - 1/self.TE) * self.E2 + fE1 * self.TE /(self.c1 + self.c2))
-    dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
-    return np.array(dx)
-
 def statePlot(self,infodict,shape,size,keylist):
 
     """ 
@@ -395,6 +410,6 @@ def statePlot(self,infodict,shape,size,keylist):
     plt.show()
     return
 
-p = patient()
+p = Patient()
 p.simulate(np.zeros(10))
 p.optimal_bolus()
