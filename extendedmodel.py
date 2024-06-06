@@ -5,7 +5,7 @@ from scipy.integrate import simpson
 from odeclass import ODE
 import pancreas
 
-def MVP(self, u, d):
+def MVP(self, d = 0, uI = 0, uP = 0, HR = None):
     """
     Solves dx = f(x, u, d)
 
@@ -23,8 +23,8 @@ def MVP(self, u, d):
     """
     dD1 = d - self.D1/self.taum
     dD2 = (self.D1 - self.D2)/self.taum
-    dIsc = u/(self.tau1 * self.C1) - self.Isc/self.tau1
-    dIp = (self.Isc - self.Ip)/self.tau2
+    dIsc = uI/(self.tau1 * self.C1) - self.Isc/self.tau1
+    dIp = (self.Isc - self.Ip)/self.tau2 + uP/self.C1
     dIeff = -self.p2 * self.Ieff + self.p2 * self.S1 * self.Ip
     dG = - (self.gezi + self.Ieff) * self.G + self.egp0 + 1000 * self.D2 / (self.Vg * self.taum)
     dGsc = (self.G - self.Gsc) / self.timestep
@@ -194,7 +194,7 @@ class Patient(ODE):
         return phi, p, Gt
 
 
-    def simulate(self, ds, u_func=None):
+    def simulate(self, uIs = None, uPs = None, ds = None, HRs = None, iterations = None):
         """
         Simulates patient.
 
@@ -214,57 +214,63 @@ class Patient(ODE):
         u_list : numpy array
             Insulin injection rate for each time step
         """
-        res = np.empty((len(ds)+1, len(self.state_keys)))
+        if ds is None: # if no meal is given, set to zero.
+            if iterations is None:
+                iterations = 24 * 60 // self.timestep # if no iteration is given, set to 24h
+            ds = np.zeros(iterations)
+            dn = iterations
+        else:
+            ds = np.array([ds]).flatten()
+            dn = len(ds)
+            if iterations is None:
+                iterations = dn
+        
+        if uPs is None:
+            uP_func = lambda i : self.pancreas(self.G)
+        else:
+            uPs = np.array([uPs]).flatten()
+            uP_func = lambda i : uPs[i%len(uPs)]
+
+        if uIs is None:
+            uI_func = lambda i : self.pump(self.G)
+        else:
+            uIs = np.array([uIs]).flatten()
+            uI_func = lambda i : uIs[i%len(uIs)]
+
+
         info = dict()
         for i in self.state_keys:
-            info[i]=np.empty(len(ds)+1)
+            info[i]=np.empty(iterations+1)
             info[i][0]=getattr(self,i)
-        res[0, :] = self.get_state()
-        inp = 0
-        u = self.us
-        if isinstance(u_func, (np.ndarray, list)):
-            u = u_func[0]
-            inp = 1
-            def get_u(inp):
-                u = u_func[inp]
-                return u, inp+1
+        info["t"] = self.time_arr(iterations+1)
+        
+        HRs = np.array([HRs]).flatten()
+        HRn = len(HRs)
+        if HRs[0] is not None:
+            info["HR"] = np.empty(iterations+1)
+            info["HR"][0] = HRs[0]
 
-        elif u_func == "PID":
-            inp = (0, self.G)
-            def get_u(inp):
-                I, y_prev = inp
-                u, I = self.PID_controller(I, self.Gsc, y_prev)
-                return u, (I, self.G)
-
-        elif isinstance(u_func, (float, int)):
-            u = u_func
-            def get_u(inp):
-                return u_func, inp
-
-        else:
-            def get_u(inp):
-                return self.us, inp
-
-        u_list = [u]
-
-        for i,d in enumerate(ds[:-1]):
-            dx = self.f_func(u, d)
+        info["uP"] = []
+        info["uI"] = []
+        for i in range(iterations):
+            d = ds[i%dn]
+            HR = HRs[i%HRn]
+            #uP = self.pancreas(self.G)
+            #uI = self.pump(self.G)
+            uP = uP_func(i)
+            uI = uI_func(i)
+            print(uP, uI)
+            dx = self.f_func(d = d, uI = uI, uP = uP, HR = HR)
+            print(dx)
             self.euler_step(dx)     
-            res[i+1,:] = self.get_state()
+
             for k in self.state_keys:
                 info[k][i+1]=getattr(self,k)
-            u, inp = get_u(inp)
-            u_list.append(u)
-            info["u"][i+1]=u
-        dx = self.f_func(u, d)
-        self.euler_step(dx)     
-        res[i+2, :] = self.get_state()
-        for k in self.state_keys:
-            info[k][i+2]=getattr(self,k)
-        info["pens"]=self.glucose_penalty(info["G"])
-        info["u"]=np.array(u_list)
-        
-        return np.array(res), u_list, info
+            info["uP"].append(uP)
+            info["uI"].append(uI)
+
+        info["pens"]=self.glucose_penalty()
+        return info
 
 
 
@@ -329,9 +335,10 @@ class Patient(ODE):
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
 
+"""
 def statePlot(self,infodict,shape,size,keylist):
 
-    """ 
+    /"/"/" 
     Makes plot of different states. 
     Parameters
     ----------
@@ -353,7 +360,7 @@ def statePlot(self,infodict,shape,size,keylist):
     -------
     For example: statePLot( self, info, (1,3), (20,20) , [["D1","D2],["Isc"],["x1","x2","x3"]]
     Creates a plot with  D1 and D2 in one figure, Isc in another and x1, x2 and x3 together in a third figure, in a 1 X 3 layout and 20X20 size.  
-    """
+    /"/"/"
 
 
     fig,ax=plt.subplots(nrows=shape[0],ncols=shape[1],figsize=size)
@@ -409,7 +416,9 @@ def statePlot(self,infodict,shape,size,keylist):
             ax[i].legend()
     plt.show()
     return
-
-p = Patient()
-p.simulate(np.zeros(10))
-p.optimal_bolus()
+"""
+p = Patient(1)
+p.simulate(np.zeros(10))["uI"]
+p.get_state()
+p.pump(p.G)
+#p.optimal_bolus()
