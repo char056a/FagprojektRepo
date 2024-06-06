@@ -403,7 +403,9 @@ class Patient(ODE):
 
 
 p = Patient(1, "EHM")
-p.simulate()["G"]
+info = p.simulate()
+print(info["I"])
+p.statePlot(info,(1,5), (10,2),  [["I"],["Q1", "Q2"],["x1","x2","x3"],["D1","D2"],["G"]])
 p.get_state()
 print(p)
 print(p.f_func())
