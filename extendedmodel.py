@@ -34,7 +34,7 @@ def MVP(self, d = 0, uI = 0, uP = 0, HR = None):
 
 
 
-def EHM(self, d = 0, uI = 0, uP = 0, HR = None):
+def EHM(self, d = 0, uI = 0, uP = 0):
     """
     Solves dx = f(x, u, d)
 
@@ -51,37 +51,27 @@ def EHM(self, d = 0, uI = 0, uP = 0, HR = None):
         Solution to system of differential equations. 
     """
     G = self.Q1/(self.VG * self.BW)
-    RA = self.f*self.D2/self.TauD
     D = 1000 * d/self.MwG
-    if HR is None:
-        HRmax = 220 - self.age
-        HR = self.HRR * (HRmax - self.HR0) + self.HR0
-    fE1x = (self.E1/(self.a * self.HR0))**self.n
-    fE1 = fE1x/(1+fE1x)
-    F01c = min(self.F01, self.F01 * G / 4.5) * self.BW
-    FR = max(0.003 * (G - 9) * self.VG * self.BW, 0) 
 
-    dx = []
-    dx.append((G - self.G)/self.TauIG)
-    dx.append(-F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + RA + self.BW * self.EGP0 * (1 - self.x3) \
-        + self.Kglu * self.VG * self.BW * self.Z2 - self.alpha * self.E2**2 * self.x1 * self.Q1)
-    dx.append(self.x1 * self.Q1 - (self.k12 + self.x2) * self.Q2 + self.alpha * self.E2**2 * self.x1 * self.Q1 \
-        - self.alpha * self.E2**2 * self.x2 * self.Q2 - self.beta * self.E1 / self.HR0)
+    F01c = min(self.F01, self.F01 * self.G / 4.5) * self.BW
+    FR = max(0.003 * (self.G - 9) * self.VG * self.BW, 0) 
 
-    dx.append(uI - self.S1 / self.TauS)
-    dx.append((self.S1 - self.S2)/self.TauS)
-    dx.append(uP / (self.VI * self.BW) + self.S2 / (self.VI * self.BW * self.TauS) - self.ke * self.I) # Den her kan være wack
-    dx.append(self.kb1 * self.I - self.ka1 * self.x1)
-    dx.append(self.kb2 * self.I - self.ka2 * self.x2)
-    dx.append(self.kb3 * self.I - self.ka3 * self.x3)
-    dx.append(self.AG * D - self.D1 / self.TauD)
-    dx.append((self.D1 - self.D2)/self.TauD)
-    dx.append(- self.Z1 / self.Tauglu)
-    dx.append((self.Z1 - self.Z2)/self.Tauglu)
-    dx.append((HR - self.HR0 - self.E1)/self.TauHR)
-    dx.append(-(fE1/self.Tauin - 1/self.TE) * self.E2 + fE1 * self.TE /(self.c1 + self.c2))
-    dx.append((self.c1 * fE1 + self.c2 - self.TE)/self.Tauex)
-    return np.array(dx)
+    UG = self.D2 / self.TauD
+    UI = self.S2/self.TauS
+
+    dG = (G - self.G)/self.TauIG
+    dQ1 = UG - F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + self.BW * self.EGP0 * (1 - self.x3)
+    dQ2 = self.Q1 * self.x1 - (self.k12 + self.x2)*self.Q2
+    dS1 = (uI - self.S1 / self.TauS)
+    dS2 = ((self.S1 - self.S2)/self.TauS)
+    dI = ((uP + UI) / (self.VI * self.BW) - self.ke * self.I) # Den her kan være wack
+    dx1 = self.kb1 * self.I - self.ka1 * self.x1
+    dx2 = self.kb2 * self.I - self.ka2 * self.x2
+    dx3 = self.kb3 * self.I - self.ka3 * self.x3
+    dD1 = self.AG * D - self.D1 / self.TauD
+    dD2 = (self.D1 - self.D2)/self.TauD
+    dx = np.array([dG, dQ1, dQ2, dS1, dS2, dI, dx1, dx2, dx3, dD1, dD2])
+    return dx
 
 
 
@@ -194,7 +184,7 @@ class Patient(ODE):
         return phi, p, Gt
 
 
-    def simulate(self, ds = None, uIs = None, uPs = None, HRs = None, iterations = None):
+    def simulate(self, ds = None, uIs = None, uPs = None, iterations = None):
         """
         Simulates patient.
 
@@ -243,23 +233,16 @@ class Patient(ODE):
             info[i]=np.empty(iterations+1)
             info[i][0]=getattr(self,i)
         info["t"] = self.time_arr(iterations+1)
-        
-        HRs = np.array([HRs]).flatten()
-        HRn = len(HRs)
-        if HRs[0] is not None:
-            info["HR"] = np.empty(iterations+1)
-            info["HR"][0] = HRs[0]
 
         info["uP"] = []
         info["uI"] = []
         for i in range(iterations):
             d = ds[i%dn]
-            HR = HRs[i%HRn]
             #uP = self.pancreas(self.G)
             #uI = self.pump(self.G)
             uP = uP_func(i)
             uI = uI_func(i)
-            dx = self.f_func(d = d, uI = uI, uP = uP, HR = HR)
+            dx = self.f_func(d = d, uI = uI, uP = uP)
             print(dx)
             self.euler_step(dx)     
 
