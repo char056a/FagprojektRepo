@@ -398,17 +398,20 @@ class Patient(ODE):
         for i,l in enumerate(keylist):
                 title=""
                 for c, k in enumerate(l):
-                    if c!=(len(l)-1) or c==0:
+                    if c==0:
                         title+=titles[self.model][k][0]
-                    else:
-                        title+= " and " + titles[self.model][k][0]
-
+                    elif 0 < c < len(l)-1:
+                        title+=", " + titles[self.model][k][0]
+                    elif c==len(l)-1:
+                        title+=" and "+titles[self.model][k][0]
+                    if k=="G":
+                        ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
                     ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
                     ax[i].set_title(title + " over time")
                     ax[i].set_xlabel("Time [h]")
                     ax[i].set_ylabel(titles[self.model][k][1])
-                    if k=="G":
-                        ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
+                    ax[i].set_xlim(0,infodict["t"][-1]/60)
+                    ax[i].set_xticks(np.linspace(0,infodict["t"][-1]/60,5))
                 ax[i].legend()
         plt.show()
         return
@@ -423,5 +426,5 @@ print(p)
 print(p.f_func())
 p.pump(p.G)
 info=p.simulate()
-p.statePlot(info,shape=(1,2),size=(20,20),keylist=[["G"],["I"]])
+p.statePlot(info,shape=(1,2),size=(20,20),keylist=[["G","I","Q1"],["I"]])
 #p.optimal_bolus()
