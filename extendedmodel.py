@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 from odeclass import ODE
 import pancreas
+from scipy.optimize import root_scalar
 
 def MVP(self, d = 0, uI = 0, uP = 0, HR = None):
     """
@@ -53,7 +54,7 @@ def EHM(self, d = 0, uI = 0, uP = 0):
     G = self.Q1/(self.VG * self.BW)
     D = 1000 * d/self.MwG
 
-    F01c = min(self.F01, self.F01 * self.G / 4.5) * self.BW
+    F01c = min(1, self.G / 4.5) * self.F01 * self.BW
     FR = max(0.003 * (self.G - 9) * self.VG * self.BW, 0) 
 
     UG = self.D2 / self.TauD
@@ -62,7 +63,7 @@ def EHM(self, d = 0, uI = 0, uP = 0):
     dG = (G - self.G)/self.TauIG
     dQ1 = UG - F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + self.BW * self.EGP0 * (1 - self.x3)
     dQ2 = self.Q1 * self.x1 - (self.k12 + self.x2)*self.Q2
-    dS1 = (uI - self.S1 / self.TauS)
+    dS1 = uI - self.S1 / self.TauS
     dS2 = ((self.S1 - self.S2)/self.TauS)
     dI = ((uP + UI) / (self.VI * self.BW) - self.ke * self.I) # Den her kan være wack
     dx1 = self.kb1 * self.I - self.ka1 * self.x1
@@ -74,6 +75,33 @@ def EHM(self, d = 0, uI = 0, uP = 0):
     return dx
 
 
+
+def HM_steadystate(self, uP = 0):
+    D1 = 0
+    D2 = 0
+
+    G = self.Gbar
+    Q1 = G * self.VG * self.BW
+    F01c = self.F01 * self.BW
+
+    k1 = self.kb1/self.ka1
+    k2 = self.kb2/self.ka2
+    k3 = self.kb3/self.ka3
+
+    eq = lambda I0 : -F01c + Q1 * I0 * k1 * (-1 + self.k12 / (self.k12 + k2 * I0)) + self.BW * self.EGP0 * (1 - k3 * I0)
+    sol = root_scalar(eq, bracket=[0, 20])
+    I = sol.root
+    
+    uIuP = I * self.VI * self.BW * self.ke
+    uI = uIuP - uP
+    x1 = k1 * I
+    x2 = k2 * I
+    x3 = k3 * I
+
+    Q2 = x1 * Q1/(self.k12 + x2)
+    S1 = S2 = uI * self.TauS
+    x0 = np.array([G, Q1, Q2, S1, S2, I, x1, x2, x3, D1, D2])
+    return x0, uI
 
 class Patient(ODE):
     def __init__(self, patient_type, model = "EHM", **kwargs):
@@ -89,8 +117,10 @@ class Patient(ODE):
         super().__init__(defaults)
         if self.model == "MVP":
             self.f_func = lambda **kwargs: MVP(self,**kwargs) #caller MVP-modellen
+            self.steadystate = lambda d : None #idk
         else:
             self.f_func = lambda **kwargs: EHM(self,**kwargs) #caller EHM-modellen
+            self.steadystate = lambda uP : HM_steadystate(self, uP)
 
         if patient_type != 1:
             self.pancreasObj = pancreas.PKPM(timestep=self.timestep, Gbar=self.Gbar)
@@ -98,15 +128,23 @@ class Patient(ODE):
             self.pumpObj = pancreas.PID(Kp = self.Kp, Td = self.Td, Ti = self.Ti, ybar = self.Gbar, timestep=self.timestep)
             
         if patient_type == 0:
-            self.pancreas = lambda G : self.pancreasObj.eval(G)
+            self.pancreas = lambda G : max(self.pancreasObj.eval(G), 0)
             self.pump = lambda G : 0
         if patient_type == 1:
             self.pancreas = lambda G : 0
             self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
         if patient_type == 2:
-            self.pancreas = lambda G : self.W * self.pancreasObj(G)
+            self.pancreas = lambda G : self.W * self.pancreasObj.eval(G)
             self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
-     
+
+        uP = self.pancreas(self.Gbar)
+        x0, uI = self.steadystate(uP) # find steady state with given parameters
+        self.us = max(0,uI)
+
+        self.update_state(x0) # set to steady state
+        for key in self.state_keys: # also set "x0" values
+            setattr(self, key+"0", getattr(self, key))
+
             
 
     def PID_controller(self, I, y, y_prev):
@@ -234,23 +272,21 @@ class Patient(ODE):
             info[i][0]=getattr(self,i)
         info["t"] = self.time_arr(iterations+1)
 
+
         info["uP"] = []
         info["uI"] = []
         for i in range(iterations):
             d = ds[i%dn]
-            #uP = self.pancreas(self.G)
-            #uI = self.pump(self.G)
             uP = uP_func(i)
             uI = uI_func(i)
             dx = self.f_func(d = d, uI = uI, uP = uP)
-            print(dx)
-            self.euler_step(dx)     
-
+            self.euler_step(dx)
+            x = self.get_state()     
+            self.update_state(x * (x > 0))
             for k in self.state_keys:
                 info[k][i+1]=getattr(self,k)
             info["uP"].append(uP)
             info["uI"].append(uI)
-
         info["pens"]=self.glucose_penalty()
         return info
 
@@ -389,7 +425,8 @@ class Patient(ODE):
                         title+=" and "+titles[self.model][k][0]
                     if k=="G":
                         ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
-                    ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
+                    max_l = min(len(infodict["t"]), len(infodict[k]))
+                    ax[i].plot((infodict["t"]/60)[:max_l],infodict[k][:max_l],".",label=k,color=colorlist[c])
                     ax[i].set_title(title, fontsize=fontsize)
                     ax[i].set_xlabel("Time [h]")
                     ax[i].set_ylabel(titles[self.model][k][1])
@@ -400,16 +437,8 @@ class Patient(ODE):
         return
 
 
-
-
-p = Patient(1, "EHM")
-info = p.simulate()
-print(info["I"])
-p.statePlot(info,(1,5), (10,2),  [["I"],["Q1", "Q2"],["x1","x2","x3"],["D1","D2"],["G"]])
+p = Patient(0,"EHM",timestep = 0.2, Gbar = 6)
 p.get_state()
-print(p)
-print(p.f_func())
-p.pump(p.G)
-info=p.simulate()
-p.statePlot(info, (1,3), (20,20) , [["D1","D2"],["I"],["x1","x2","x3"]],7)
-#p.optimal_bolus()
+info = p.simulate(iterations=2000)
+
+p.statePlot(info, (2, 3), (5, 5), [["G"],["Q1", "Q2"], ["S1", "S2"], ["I"], ["x1", "x2", "x3"], ["D1", "D2"]], 12)
