@@ -316,7 +316,7 @@ class Patient(ODE):
 
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
-    def statePlot(self,infodict,shape,size,keylist,fontsize):
+    def statePlot(self,infodict,shape,size,keylist,fonts):
 
         """ 
         Makes plot of different states. 
@@ -390,12 +390,13 @@ class Patient(ODE):
                     if k=="G":
                         ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
                     ax[i].plot((infodict["t"])/60,infodict[k],".",label=k,color=colorlist[c])
-                    ax[i].set_title(title, fontsize=fontsize)
-                    ax[i].set_xlabel("Time [h]")
+                    ax[i].set_title(title,fontsize=fonts)
+                    ax[i].set_xlabel("Time [h]",fontsize=fonts)
                     ax[i].set_ylabel(titles[self.model][k][1])
                     ax[i].set_xlim(0,infodict["t"][-1]/60)
                     ax[i].set_xticks(np.linspace(0,infodict["t"][-1]/60,5))
-                ax[i].legend()
+                    ax[i].tick_params(axis='x', labelsize=7)
+                ax[i].legend(loc="lower left")
         plt.show()
         return
 
@@ -405,10 +406,5 @@ class Patient(ODE):
 p = Patient(1, "EHM")
 info = p.simulate()
 print(info["I"])
-p.statePlot(info,(1,4), (40,20),  [["I"],["Q1", "Q2"],["D1","D2"],["G"]],7)
-p.get_state()
-print(p)
-print(p.f_func())
-p.pump(p.G)
-info=p.simulate()
+p.statePlot(infodict=info,shape=(2,2), size=(5,15),  keylist=[["I"],["Q1", "Q2"],["D1","D2"]],fonts=7)
 #p.optimal_bolus()
