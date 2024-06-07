@@ -428,8 +428,6 @@ class Patient(ODE):
                     if k=="G":
                         ax[i].plot(infodict["t"][:max_l]/60,4.44*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
                     ax[i].plot((infodict["t"][:max_l])/60,infodict[k][:max_l],".",label=k,color=colorlist[c])
-                    print("hi")
-
                     ax[i].set_title(title,fontsize=fonts)
                     ax[i].set_xlabel("Time [h]",fontsize=fonts)
                     ax[i].set_ylabel(titles[self.model][k][1])
