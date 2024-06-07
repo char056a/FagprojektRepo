@@ -352,7 +352,7 @@ class Patient(ODE):
 
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us
-    def statePlot(self,infodict,shape,size,keylist,fontsize):
+    def statePlot(self,infodict,shape,size,keylist,fonts):
 
         """ 
         Makes plot of different states. 
@@ -396,8 +396,8 @@ class Patient(ODE):
 
             "EHM": {
             "G" : ["Blood Glucose","[mmol/L]"],
-            "Q1" : ["Main bloodstream glucose","[mmol]"],
-            "Q2" : ["Glucose in peripheral tissue","[mmol]"],
+            "Q1" : ["Main bloods gluc","[mmol]"],
+            "Q2" : ["Gluc in peripheral tissue","[mmol]"],
             "S1" : ["Subc. insulin variable 1","[mU]"],
             "S2" : ["Subc. insulin variable 2","[mU]"],
             "I"  : ["Plasma insulin conc.","[mU/L]"],
@@ -423,22 +423,26 @@ class Patient(ODE):
                         title+=", " + titles[self.model][k][0]
                     elif c==len(l)-1:
                         title+=" and "+titles[self.model][k][0]
-                    if k=="G":
-                        ax[i].plot(infodict["t"]/60,4.44*np.ones(len(infodict["t"])),"--",color="#998F85",label="minimum glucose")
                     max_l = min(len(infodict["t"]), len(infodict[k]))
-                    ax[i].plot((infodict["t"]/60)[:max_l],infodict[k][:max_l],".",label=k,color=colorlist[c])
-                    ax[i].set_title(title, fontsize=fontsize)
-                    ax[i].set_xlabel("Time [h]")
+
+                    if k=="G":
+                        ax[i].plot(infodict["t"][:max_l]/60,4.44*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
+                    ax[i].plot((infodict["t"][:max_l])/60,infodict[k][:max_l],".",label=k,color=colorlist[c])
+                    print("hi")
+
+                    ax[i].set_title(title,fontsize=fonts)
+                    ax[i].set_xlabel("Time [h]",fontsize=fonts)
                     ax[i].set_ylabel(titles[self.model][k][1])
-                    ax[i].set_xlim(0,infodict["t"][-1]/60)
-                    ax[i].set_xticks(np.linspace(0,infodict["t"][-1]/60,5))
-                ax[i].legend()
+                    ax[i].set_xlim(0,infodict["t"][:max_l][-1]/60)
+                    ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/60,5))
+                    ax[i].tick_params(axis='x', labelsize=5)
+                ax[i].legend(loc="lower left")
         plt.show()
         return
 
 
 p = Patient(0,"EHM",timestep = 0.2, Gbar = 6)
-p.get_state()
+
 info = p.simulate(iterations=2000)
 
 p.statePlot(info, (2, 3), (5, 5), [["G"],["Q1", "Q2"], ["S1", "S2"], ["I"], ["x1", "x2", "x3"], ["D1", "D2"]], 12)

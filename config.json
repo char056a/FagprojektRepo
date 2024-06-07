@@ -1,6 +1,6 @@
 {
     "general" : {
-    "timestep": 5,
+    "timestep": 0.1,
 
 
     "Kp": 0.03,
