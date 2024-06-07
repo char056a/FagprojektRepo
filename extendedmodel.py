@@ -395,7 +395,7 @@ class Patient(ODE):
                     ax[i].set_ylabel(titles[self.model][k][1])
                     ax[i].set_xlim(0,infodict["t"][-1]/60)
                     ax[i].set_xticks(np.linspace(0,infodict["t"][-1]/60,5))
-                    ax[i].tick_params(axis='x', labelsize=7)
+                    ax[i].tick_params(axis='x', labelsize=5)
                 ax[i].legend(loc="lower left")
         plt.show()
         return
