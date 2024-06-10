@@ -15,23 +15,30 @@ class PKPM(ODE):
             for key in self.state_keys: # also set "x0" values
                 setattr(self, key+"0", getattr(self, key))
 
-    def ode(self, G):
+    def get_ISR(self, G, **kwargs):
         if G <= self.Gl: # if glucose is low
             f = self.fb
+        else: # if glucose is high
+            f = self.fb + (1 - self.fb) *  (G - self.Gl) / (self.Kf +  G - self.Gl)
+        I0 = kwargs.get("I0", self.I0)
+        rho = kwargs.get("rho", self.rho)
+        DIR = kwargs.get("DIR", self.DIR)
+        N = kwargs.get("N", self.N)
+        return max(I0 * rho * DIR * f * N,0) # do not let isr be negative
+
+
+    def ode(self, G):
+        if G <= self.Gl: # if glucose is low
             alpha2 = 0
             idx = 0 # use first value for params with two values
         else: # if glucose is high
             idx = 1 # use second value for params with two values
-            f = self.fb + (1 - self.fb) *  (G - self.Gl) / (self.Kf +  G - self.Gl)
             if G <= self.Gu: # if glucose is below the upper level
                 alpha2 = self.hhat * (G - self.Gl)/(self.Gu - self.Gl) 
             else: # if glucose is above the upper level
                 alpha2 = self.hhat
         # ode
         dM = self.alpha1[idx] - self.delta1[idx] * self.M
-      #  print("l1", self.v[idx] * self.M)
-       # print("l2", self.delta2 * self.P)
-
         dP = self.v[idx] * self.M - self.delta2 * self.P - self.k * self.P * self.rho * self.DIR
         dR =  self.k * self.P * self.rho * self.DIR - self.gamma * self.R
         dgamma = self.eta * (-self.gamma + self.gammab + alpha2)
@@ -40,13 +47,12 @@ class PKPM(ODE):
         drho = self.zeta * (-self.rho + self.rhob + self.krho * (self.gamma - self.gammab))
         
         dx = np.array([dM, dP, dR, dgamma, dD, dDIR, drho])
-        ISR = self.get_ISR(f)
+        ISR = self.get_ISR(G)
         return dx, ISR
 
 
-    def steadystate2(self, G):
+    def steadystate(self, G):
         if G <= self.Gl: # if glucose is low
-            f = self.fb
             alpha2 = 0
             idx = 0 # use first value for params with two values
         else: # if glucose is high
@@ -62,13 +68,12 @@ class PKPM(ODE):
         P = 1/self.k
         R = (self.v[idx] * M - P*self.delta2)/gamma
         DIR = R * gamma / rho
-        D = (self.k1m * DIR + self.rho * DIR)/ (self.k1p * (self.CT - DIR))
+        D = (self.k1m * DIR + rho * DIR)/ (self.k1p * (self.CT - DIR))
         x0 = np.array([M, P, R, gamma, D, DIR, rho])
         return x0
     
-    def steadystate(self, G):
+    def steadystate2(self, G):
         if G <= self.Gl: # if glucose is low
-            f = self.fb
             alpha2 = 0
             idx = 0 # use first value for params with two values
         else: # if glucose is high
@@ -87,14 +92,6 @@ class PKPM(ODE):
         rho = self.rhob + self.krho * alpha2
         x0 = np.array([M, P, R, gamma, D, DIR, rho])
         return x0
-
-
-    def get_ISR(self, f, **kwargs):
-        I0 = kwargs.get("I0", self.I0)
-        rho = kwargs.get("rho", self.rho)
-        DIR = kwargs.get("DIR", self.DIR)
-        N = kwargs.get("N", self.N)
-        return max(I0 * rho * DIR * f * N,0) # do not let isr be negative
 
     def eval(self, G):
         dx, ISR = self.ode(G)
@@ -158,3 +155,4 @@ class PID(ODE):
         self.yprev = y 
         self.I += dI * self.timestep # Updates integral term
         return res        
+

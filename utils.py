@@ -1,6 +1,10 @@
 from scipy.optimize import minimize
 import numpy as np
 
+
+def ReLU(x):
+    return x * (x > 0)
+
 def piecewise_linear(b1, a1, b2, a2, x_split):
     def func(x):
         if x < x_split:
