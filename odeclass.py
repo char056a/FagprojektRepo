@@ -36,7 +36,7 @@ class ODE:
         return
 
     def time_arr(self, length):
-        return np.arange(0, length*self.timestep, self.timestep)
+        return np.linspace(0, length*self.timestep, length)
 
     def euler_step(self, dx):
         """

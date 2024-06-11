@@ -4,13 +4,26 @@ import json
 
     
 class PKPM(ODE):
-    def __init__(self, Gbar = None, **kwargs):
+    def __init__(self, patient_type = 0, Gbar = None, **kwargs):
         with open('config.json', 'r') as f:
             defaults = json.load(f)["PKPM"]
+
+        if patient_type == 2 :
+            remove = "normal"
+            keep = "T2"
+        else:
+            remove = "T2"
+            keep = "normal"
+
+        del defaults[remove]
+        for key, item in defaults[keep].items():
+            defaults[key] = item
+        del defaults[keep]
+
         defaults.update(kwargs)
         super().__init__(defaults)
         if Gbar is not None: # if a desired glucose level is given
-            x0 = self.steadystate(Gbar) # find steady state with given parameters
+            x0, _ = self.steadystate(Gbar) # find steady state with given parameters
             self.update_state(x0) # set to steady state
             for key in self.state_keys: # also set "x0" values
                 setattr(self, key+"0", getattr(self, key))
@@ -24,7 +37,7 @@ class PKPM(ODE):
         rho = kwargs.get("rho", self.rho)
         DIR = kwargs.get("DIR", self.DIR)
         N = kwargs.get("N", self.N)
-        return max(I0 * rho * DIR * f * N,0) # do not let isr be negative
+        return self.W * max(I0 * rho * DIR * f * N,0) # do not let isr be negative
 
 
     def ode(self, G):
@@ -45,7 +58,6 @@ class PKPM(ODE):
         dD = self.gamma * self.R - self.k1p * (self.CT - self.DIR) * self.D + self.k1m * self.DIR
         dDIR = self.k1p * (self.CT - self.DIR) * self.D - self.k1m * self.DIR - self.rho * self.DIR
         drho = self.zeta * (-self.rho + self.rhob + self.krho * (self.gamma - self.gammab))
-        
         dx = np.array([dM, dP, dR, dgamma, dD, dDIR, drho])
         ISR = self.get_ISR(G)
         return dx, ISR
@@ -70,28 +82,9 @@ class PKPM(ODE):
         DIR = R * gamma / rho
         D = (self.k1m * DIR + rho * DIR)/ (self.k1p * (self.CT - DIR))
         x0 = np.array([M, P, R, gamma, D, DIR, rho])
-        return x0
+        ISR = self.get_ISR(G, rho = rho, DIR = DIR)
+        return x0, ISR
     
-    def steadystate2(self, G):
-        if G <= self.Gl: # if glucose is low
-            alpha2 = 0
-            idx = 0 # use first value for params with two values
-        else: # if glucose is high
-            idx = 1 # use second value for params with two values
-            if G <= self.Gu: # if glucose is below the upper level
-                alpha2 = self.hhat * (G - self.Gl)/(self.Gu - self.Gl) 
-            else: # if glucose is above the upper level
-                alpha2 = self.hhat
-        # ode
-        M = self.alpha1[idx]/self.delta1[idx]
-        P = 1/self.k
-        R = (self.k * self.v[idx] * self.alpha1[idx] - self.delta1[idx] * self.delta2)/(self.k*self.delta1[idx] * (self.gammab + alpha2))
-        gamma = self.gammab + alpha2
-        D = (self.k * self.v[idx] * self.alpha1[idx] - self.delta1[idx] * self.delta2)*(self.rhob + self.krho * alpha2 + self.k1m)/(self.k1p*(self.CT*self.k*self.delta1[idx]*(self.rhob + self.krho * alpha2) - (self.k*self.v[idx]*self.alpha1[idx]-self.delta1[idx]*self.delta2)))
-        DIR = (self.k * self.v[idx]*self.alpha1[idx] - self.delta1[idx] * self.delta2)/(self.k * self.delta1[idx]*(self.rhob + self.krho * alpha2))
-        rho = self.rhob + self.krho * alpha2
-        x0 = np.array([M, P, R, gamma, D, DIR, rho])
-        return x0
 
     def eval(self, G):
         dx, ISR = self.ode(G)
@@ -155,4 +148,8 @@ class PID(ODE):
         self.yprev = y 
         self.I += dI * self.timestep # Updates integral term
         return res        
+
+p = PKPM()
+p.ode(6)
+p.eval(6)
 

@@ -29,7 +29,7 @@ def MVP(self, d = 0, uI = 0, uP = 0, HR = None):
     dIp = (self.Isc - self.Ip + uP/self.CI)/self.tau2
     dIeff = -self.p2 * self.Ieff + self.p2 * self.SI * self.Ip
     dG = - (self.GEZI + self.Ieff) * self.G + self.EGP0 + 1000 * self.D2 / (self.VG * self.taum)
-    dGsc = (self.G - self.Gsc) / self.timestep
+    dGsc = (self.G - self.Gsc) / self.tausc
 
     dx = np.array([dD1, dD2, dIsc, dIp, dIeff, dG, dGsc])
     return dx
@@ -63,6 +63,8 @@ def EHM(self, d = 0, uI = 0, uP = 0):
         Solution to system of differential equations. 
     """
     G = self.Q1/(self.VG * self.BW)
+    
+
     D = 1000 * d/self.MwG
 
     F01c = min(1, self.G / 4.5) * self.F01 * self.BW
@@ -72,6 +74,7 @@ def EHM(self, d = 0, uI = 0, uP = 0):
     UI = self.S2/self.taus
 
     dG = (G - self.G)/self.tauig
+    dGsc = (self.G - self.Gsc) / self.tausc
     dQ1 = UG - F01c - FR - self.x1 * self.Q1 + self.k12 * self.Q2 + self.BW * self.EGP0 * (1 - self.x3)
     dQ2 = self.Q1 * self.x1 - (self.k12 + self.x2)*self.Q2
     dS1 = uI - self.S1 / self.taus
@@ -82,7 +85,7 @@ def EHM(self, d = 0, uI = 0, uP = 0):
     dx3 = self.kb3 * self.I - self.ka3 * self.x3
     dD1 = self.AG * D - self.D1 / self.taud
     dD2 = (self.D1 - self.D2)/self.taud
-    dx = np.array([dG, dQ1, dQ2, dS1, dS2, dI, dx1, dx2, dx3, dD1, dD2])
+    dx = np.array([dG, dGsc, dQ1, dQ2, dS1, dS2, dI, dx1, dx2, dx3, dD1, dD2])
     return dx
 
 def HM_steadystate(self, uP = 0):
@@ -106,7 +109,7 @@ def HM_steadystate(self, uP = 0):
 
     Q2 = x1 * Q1/(self.k12 + x2)
     S1 = S2 = uI * self.taus
-    x0 = np.array([G, Q1, Q2, S1, S2, I, x1, x2, x3, 0, 0])
+    x0 = np.array([G, G, Q1, Q2, S1, S2, I, x1, x2, x3, 0, 0])
     return x0, uI
 
 def HM_G_from_u(self, u):
@@ -133,7 +136,7 @@ def HM_G_from_u(self, u):
 class Patient(ODE):
     def __init__(self, patient_type, model = "EHM", **kwargs):
         self.model = model.upper()
-        
+        self.type = patient_type
         defaults = {} #tomt dictionary 
         with open('config.json', 'r') as f:
             data = json.load(f) #læs json-fil
@@ -148,20 +151,31 @@ class Patient(ODE):
             self.f_func = lambda **kwargs: EHM(self,**kwargs) #caller EHM-modellen
 
         if patient_type != 1:
-            self.pancreasObj = pancreas.PKPM(timestep=self.timestep, Gbar=self.Gbar, **kwargs.get("pancreas_param", {}))
+            self.pancreasObj = pancreas.PKPM(patient_type = patient_type, timestep=self.timestep/self.pancreas_n, Gbar=self.Gbar, **kwargs.get("pancreas_param", {}))
         if patient_type != 0:
             self.pumpObj = pancreas.PID(Kp = self.Kp, Td = self.Td, Ti = self.Ti, ybar = self.Gbar, timestep=self.timestep)
-            
-        if patient_type == 0:
-            self.pancreas = lambda G : max(self.pancreasObj.eval(G), 0)
-            self.pump = lambda G : 0
-        if patient_type == 1:
-            self.pancreas = lambda G : 0
-            self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
-        if patient_type == 2:
-            self.pancreas = lambda G : self.W * self.pancreasObj.eval(G)
-            self.pump = lambda G : max(self.pumpObj.eval(G) + self.us,0)
 
+    def pump(self, G = None):
+        if self.type == 0:
+            return 0
+        if G is None:
+            G == self.Gsc
+        return max(0, self.pumpObj.eval(G) + self.us)
+    
+    def pancreas(self, G):
+        if self.type == 1:
+            return 0
+        u = 0
+        for i in range(self.pancreas_n):
+            u += self.pancreasObj.eval(G)
+        return max(0, u/self.pancreas_n)
+        
+    def full_reset(self):
+        self.reset()
+        if self.type != 1:
+            self.pancreasObj.reset()
+        if self.type != 0:
+            self.pumpObj.reset()
 
     def steadystate(self, uP):
         if self.model == "EHM":
@@ -200,7 +214,7 @@ class Patient(ODE):
         """
         if G is None: # If G is not specified, use current G
             G = self.G
-        func = lambda g :  1/2 * (g - self.Gbar)**2 + self.kappa/2 * max((self.Gmin - g), 0)**2
+        func = lambda g :  1/2 * (18 * (g - self.Gbar))**2 + self.kappa/2 * max((18*(self.Gmin - g)), 0)**2
         if isinstance(G, (np.ndarray, list)):
             return np.array([func(Gi) for Gi in G])
         return func(G)
@@ -249,29 +263,41 @@ class Patient(ODE):
         u_list : numpy array
             Insulin injection rate for each time step
         """
+        if iterations is None:
+            iterations = 0
+            for arr in [ds, uIs, uPs]:
+                if arr is not None:
+                    iterations = max(len(arr), iterations)
+            if iterations == 0:
+                iterations = int(24 * 60 / self.timestep)
         if ds is None: # if no meal is given, set to zero.
-            if iterations is None:
-                iterations = int(24 * 60 / self.timestep) # if no iteration is given, set to 24h
             ds = np.zeros(iterations)
             dn = iterations
         else:
             ds = np.array([ds]).flatten()
             dn = len(ds)
-            if iterations is None:
-                iterations = dn
+
+
+        uPs = np.array([uPs]).flatten()
+        uIs = np.array([uIs]).flatten()
+
+        def uP_func(i):
+            u_panc = self.pancreas(self.G)
+            u_arr = uPs[i%len(uPs)]
+            if u_arr is None:
+                return u_panc
+            if np.isnan(u_arr):
+                return u_panc
+            return u_arr
         
-        if uPs is None:
-            uP_func = lambda i : self.pancreas(self.G)
-        else:
-            uPs = np.array([uPs]).flatten()
-            uP_func = lambda i : uPs[i%len(uPs)]
-
-        if uIs is None:
-            uI_func = lambda i : self.pump(self.G)
-        else:
-            uIs = np.array([uIs]).flatten()
-            uI_func = lambda i : uIs[i%len(uIs)] if not np.isnan(uIs[i%len(uIs)]) else self.pump(self.G)
-
+        def uI_func(i):
+            u_pump = self.pump(self.Gsc)
+            u_arr = uIs[i%len(uIs)]
+            if u_arr is None:
+                return u_pump
+            if np.isnan(u_arr):
+                return u_pump
+            return u_arr
 
         info = dict()
         for i in self.state_keys:
@@ -295,27 +321,30 @@ class Patient(ODE):
         info["pens"]=self.glucose_penalty(info["G"])
         return info
 
+    def meal_bolus(self, meal_size = 0, min_U = 0, max_U = 50, n = 50, iterations = 1000):
+        Us = np.linspace(min_U, max_U, n)
+        phi_best = 10**18
+        for j, U in enumerate(Us):
+            self.full_reset()
+            phi, p, Gt = self.bolus_sim(U, meal_size, meal_idx=0, iterations=iterations)
+            if phi < phi_best:
+                p_best = p
+                G_best = Gt
+                phi_best = phi
+                best_u = U
+        return best_u, phi_best, p_best, G_best
+
+
     def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 50, min_meal = 20, max_meal = 150, n = 50, iterations = 1000):
         Us = np.linspace(min_U, max_U, n)
         meals = np.linspace(min_meal, max_meal, n)
-        res = np.empty((len(meals), len(Us), 3))
+        res = np.empty((len(meals), len(Us)))
         for i, d0 in enumerate(meals):
             for j, U in enumerate(Us):
-                self.reset()
+                self.full_reset()
                 phi, _, _ = self.bolus_sim(U, d0, meal_idx=meal_idx, iterations=iterations)
-                res[n - 1 - j ,i] = [phi]*3
-        best = np.argmin(res[:,:,0], axis=0)
-
-        r = 1 / (res.max() - res.min())
-        res = r * (res - res.min())
-
-        for i,j in enumerate(best):
-            res[j,i] = [1,0,0]
-
-        plt.imshow(res, extent = [min_meal, max_meal,min_U, max_U], aspect="auto")
-        plt.ylabel("Bolus Size (U)")
-        plt.xlabel("Meal Size (g. CHO)")
-
+                res[n - 1 - j ,i] = phi
+        best = np.argmin(res, axis=0)
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us, res
     
@@ -370,11 +399,12 @@ class Patient(ODE):
             "pens": ["Penalty function", " "],
             "uI" : ["Injected Insulin", "[mU/min]"],
             "uP" : ["Insulin from pancreas", "[mU/min]"]
-
             },
 
             "EHM": {
             "G" : ["Blood Glucose","[mmol/L]"],
+            "Gsc": ["Subc. glucose","[mmol/L]"], 
+
             "Q1" : ["Main bloods gluc","[mmol]"],
             "Q2" : ["Gluc in peripheral tissue","[mmol]"],
             "S1" : ["Subc. insulin variable 1","[mU]"],
@@ -392,7 +422,6 @@ class Patient(ODE):
             "pens": ["Penalty function", " "],
             "uI" : ["Injected Insulin", "[mU/min]"],
             "uP" : ["Insulin from pancreas", "[mU/min]"]
-
             }
         }
         
@@ -418,19 +447,20 @@ class Patient(ODE):
                     ax[i].tick_params(axis='x', labelsize=5)
                 ax[i].legend(loc="lower left")
         plt.show()
+        fig.tight_layout()
         return
 
-def find_ss(model = "EHM", **kwargs):    
+def find_ss(model = "EHM", **kwargs): 
+    p = Patient(patient_type = 0, model = model, **kwargs)   
     def cost(G):
-        p = Patient(0, model = model, Gbar = G, **kwargs)
-        u = p.pancreasObj.get_ISR(G)
+        _, u = p.pancreasObj.steadystate(G)
         G_res = p.G_from_u(u)
         return G_res-G
     return root_scalar(cost,  bracket= [0.5,20])
 
 def baseline_patient(patient_type = 1, model = "EHM", **kwargs):
         Gbar = kwargs.get("Gbar" , find_ss(model, **kwargs).root)
-        patient = Patient(patient_type = patient_type, model = model, Gbar = Gbar, **kwargs)
+        patient = Patient(patient_type = patient_type, model = model, **kwargs)
         uP = patient.pancreas(Gbar)
         x0, uI = patient.steadystate(uP)
         patient.us = max(0,uI)

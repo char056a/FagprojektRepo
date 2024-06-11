@@ -38,3 +38,18 @@ def piecewise_linear_fit(x, y):
                 func = piecewise_linear(*sol1, *sol2, x[spl])
                 min_res = res
     return min_res, func, best_spl
+
+
+
+def meal_array(timestep, meals, h=24):
+    d_n = int(h * 60 / timestep)
+    d = np.zeros(d_n)
+    for m in meals:
+        if len(m) == 2:
+            idx = int(m[1] / timestep * h)
+            d[idx] = m[0]/ timestep
+        else:
+            idx = (np.array(m)[1:3] / timestep * 60).astype(int)
+
+            d[idx[0]:idx[1]] = m[0]/(idx[1]-idx[0])/timestep
+    return d
