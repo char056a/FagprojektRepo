@@ -356,6 +356,35 @@ class Patient(ODE):
             uIs[m[0]] = 1000 * m[1] / self.timestep
             uIs[m[0]+1:m[2]] = 0
         return self.simulate(ds = ds, uIs = uIs)
+    
+    def hist(self,G_arr):
+        Gbar_s=str(np.round(self.Gbar,3))
+        Gmin_s=str(np.round(self.Gmin,3))
+        bin_place=np.empty(len(G_arr))
+        for i, G in enumerate(G_arr):
+            if G<3:
+                bin_place[i]=0
+            elif 3<=G<self.Gmin:
+                bin_place[i]=1
+            elif self.Gmin<=G<self.Gbar-0.5:
+                bin_place[i]=2
+            elif self.Gbar-0.5<=self.Gbar+0.5:
+                bin_place[i]=3
+            elif self.Gbar+0.5<=G<10:
+                bin_place[i]=4
+            elif 10 <=G<13:
+                bin_place[i]=5
+            elif 13<=G:
+                bin_place[i]=Gbar_s
+        plt.figure(figsize=(10,10))
+        n,bins,patches=plt.hist(bin_place,bins=range(8),orientation="horizontal",align="left",density=True)
+        colors=["#020249","#050578","#3c3cf4","#00FF7F","#f82828","#7e0202","#5a0000"]
+        for c, p in zip(colors, patches):
+            p.set_facecolor(c)
+        plt.yticks(ticks=[0,1,2,3,4,5,6],labels=["Very high (13 < G )","high ( 10 < G <13)","Moderately high (" +Gbar_s+ " + 0.5 < G < 10)","Ideal (" +Gbar_s+" -0.5 < G < " +Gbar_s+" +0.5)","moderately low (" +Gmin_s+ " < G <"+  Gbar_s + "-0.5)","Low (3 < G <"+ Gmin_s+"-0.5)","very low (G < 3)"])
+        plt.tick_params(axis='y', labelsize=5)
+        plt.show()
+        return
 
     def statePlot(self,infodict,shape,size,keylist,fonts):
 
