@@ -460,7 +460,7 @@ def find_ss(model = "EHM", **kwargs):
 
 def baseline_patient(patient_type = 1, model = "EHM", **kwargs):
         Gbar = kwargs.get("Gbar" , find_ss(model, **kwargs).root)
-        patient = Patient(patient_type = patient_type, model = model, **kwargs)
+        patient = Patient(patient_type = patient_type, model = model, Gbar = Gbar, **kwargs)
         uP = patient.pancreas(Gbar)
         x0, uI = patient.steadystate(uP)
         patient.us = max(0,uI)
