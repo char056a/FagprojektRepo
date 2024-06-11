@@ -381,8 +381,9 @@ class Patient(ODE):
         colors=["#020249","#050578","#3c3cf4","#00FF7F","#f82828","#7e0202","#5a0000"]
         for c, p in zip(colors, patches):
             p.set_facecolor(c)
-        plt.yticks(ticks=[0,1,2,3,4,5,6],labels=["Very high (13 < G )","high ( 10 < G <13)","Moderately high (" +Gbar_s+ " + 0.5 < G < 10)","Ideal (" +Gbar_s+" -0.5 < G < " +Gbar_s+" +0.5)","moderately low (" +Gmin_s+ " < G <"+  Gbar_s + "-0.5)","Low (3 < G <"+ Gmin_s+"-0.5)","very low (G < 3)"])
+        plt.yticks(ticks=[0,1,2,3,4,5,6],labels=["Very high (13 < G )","high ( 10 < G <13)","Moderately high (" +Gbar_s+ " + 0.5 < G < 10)","Ideal (" +Gbar_s+" -0.5 < G < " +Gbar_s+" +0.5)","moderately low (" +Gmin_s+ " < G <"+  Gbar_s + "-0.5)","Low (3 < G <"+ Gmin_s+")","very low (G < 3)"])
         plt.tick_params(axis='y', labelsize=5)
+        plt.title("Percent of time spent at different glucose levels      Steady state G is " + Gbar_s)
         plt.show()
         return
 
@@ -497,3 +498,50 @@ def baseline_patient(patient_type = 1, model = "EHM", **kwargs):
         for key in patient.state_keys: # also set "x0" values
             setattr(patient, key+"0", getattr(patient, key))
         return patient
+
+p_EHM = baseline_patient(1, model = "EHM", timestep=1, n_pancreas = 20)
+meals = [[50, 6,6.25], [20, 10, 10.25], [100, 12.5, 12.75], [20, 15, 15.25], [100, 18.5, 18.75], [20, 21, 21.25]]
+
+def meal_array(timestep, meals, h=24):
+    d_n = int(h * 60 / timestep)
+    d = np.zeros(d_n)
+    for m in meals:
+        if len(m) == 2:
+            idx = int(m[1] / timestep * 60)
+            d[idx] = m[0]/ timestep
+        else:
+            idx = (np.array(m)[1:3] / timestep * 60).astype(int)
+
+            d[idx[0]:idx[1]] = m[0]/(idx[1]-idx[0])/timestep
+    return d
+meal_arr = meal_array(p_EHM.timestep, meals)
+
+def day_sim(self, ds, bolus_data):
+    n = len(ds)
+    uIs = np.empty(n)
+    uIs[:] = np.nan
+    for m in bolus_data:
+        idx1, idx2 = (np.array(m)[1:3] / self.timestep * 60).astype(int)
+        uIs[idx1] = 1000 * m[0] / self.timestep
+        uIs[idx1+1:idx2] = 0
+    return self.simulate(ds = ds, uIs = uIs)
+
+
+bolus = []
+for m in meals:
+    u, phi, p, Gt = p_EHM.meal_bolus(m[0], max_U = 5, n = 10)
+    bolus.append([u,m[1], m[1] + 0.01])
+
+
+info = day_sim(p_EHM, meal_arr, bolus)
+for i,u in enumerate(info["uI"]):
+    if u is None:
+        info["uI"][i] = info["uI"][i-1]
+    if u == np.nan:
+        info["uI"][i] = info["uI"][i-1]
+    if u > 300:
+        info["uI"][i] = info["uI"][i-1]
+
+p_EHM.statePlot(info, (2,3), (15, 8), [["G"],["Q1", "Q2"], ["S1", "S2"], ["I"], ["x1", "x2", "x3"], ["uI", "uP"]], 10)
+
+p_EHM.hist(info["G"])
