@@ -18,10 +18,16 @@ class ODE:
         x = np.array([getattr(self,key) for key in self.state_keys])
         return x
 
+    def get_initial_state(self):
+        return np.array([getattr(self,key+"0") for key in self.state_keys])
+
     def get_attr(self, states, attr):
         """Returns column of state matrix with idx matching given attribute"""
         idx = self.state_keys.index(attr) # Finds the index of desired attribute
-        return states[:,idx]
+        if states.ndim == 2:
+            return states[:,idx]
+        else:
+            return states[idx]
 
     def update_state(self, x_new):
         """Update state vector to values given by input"""
@@ -31,7 +37,7 @@ class ODE:
 
     def reset(self):
         """Resets state to x0"""
-        x0 = np.array([getattr(self,key+"0") for key in self.state_keys])
+        x0 = self.get_initial_state()
         self.update_state(x0)
         return
 

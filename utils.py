@@ -1,5 +1,7 @@
 from scipy.optimize import minimize
 import numpy as np
+from extendedmodel import *
+from pancreas import *
 
 
 def ReLU(x):
@@ -39,17 +41,88 @@ def piecewise_linear_fit(x, y):
                 min_res = res
     return min_res, func, best_spl
 
-
-
-def meal_array(timestep, meals, h=24):
-    d_n = int(h * 60 / timestep)
-    d = np.zeros(d_n)
-    for m in meals:
+def timestamp_arr(data, timestep, fill = 0, h=24):
+    n = int(h * 60 / timestep)
+    arr = np.empty(n)
+    arr[:] = fill
+    for m in data:
         if len(m) == 2:
-            idx = int(m[1] / timestep * h)
-            d[idx] = m[0]/ timestep
+            idx = int(m[1] / timestep * 60)
+            arr[idx] = m[0]/ timestep
         else:
             idx = (np.array(m)[1:3] / timestep * 60).astype(int)
 
-            d[idx[0]:idx[1]] = m[0]/(idx[1]-idx[0])/timestep
-    return d
+            arr[idx[0]:idx[1]] = m[0]/(idx[1]-idx[0])/timestep
+    return arr
+
+def filter(arr, minval=None, maxval=None):
+    n = len(x)
+    for i,x in enumerate(arr):
+        if x is None:
+            x[i] = x[(i-1)%n]
+        if x == np.nan:
+            x[i] = x[(i-1)%n]
+        if minval is not None:
+            if x < minval:
+                x[i] = x[(i-1)%n]
+        if maxval is not None:
+            if x > maxval:
+                x[i] = x[(i-1)%n]
+    return x
+
+def generate_table(meals, bolus):
+    bolus = bolus.T
+    start = meals[:, 1] 
+    end = meals[:, 2]
+    n = 3
+    if bolus.ndim == 2:
+        n += bolus.shape[1] - 1
+    inner = "Time & Meal & Bolus Size \\\\ \\hline \n"
+    for m,b in zip(meals, bolus):
+        start, end = [f"{str(int(m[i+1])).zfill(2)}:{str(int(60*(m[i+1]%1))).zfill(2)}" for i in range(2)]
+        bol = ""
+        row1 = f"{start}-{end} & {int(m[0])} "
+        if bolus.ndim == 2:
+            row2 = "".join([f"& {int(b[i])} "  for i in range(n-2)]) 
+        else:
+            row2 = "% {int(b)}"
+        row3 = "\\\\ \\hline \n"
+        inner += row1 + row2 + row3
+    return "\\begin{table}[]\n\\begin{tabular}{|"+"".join(["r|" for i in range(n)])+"}\\hline \n"+inner+"\\end{tabular}\n\\end{table}"
+
+def optimize_pid(patient, meal_arr, uIs):
+    pid_keys =  ["Kp", "Ti", "Td"]
+    def cost(params):
+        patient.full_reset()
+        for i,k in enumerate(pid_keys):
+            setattr(patient.pumpObj, k, params[i])
+        info = patient.simulate(ds = meal_arr, uIs = uIs)
+        return info["pens"].sum()
+    res = minimize(cost, [getattr(patient.pumpObj, i) for i in pid_keys], method="CG")
+    for i,k in enumerate(pid_keys):
+        setattr(patient, k, res.x[i])
+    return res
+
+
+
+def plan_treatment(patient, meals):
+    t = patient.timestep
+    
+    meal_arr = timestamp_arr(meals, t, fill = 0)
+
+    bolus = []
+    for m in meals:
+        u = patient.best_bolus(meal_size = m[0])
+        bolus.append([u, m[1]])
+
+    bolus = np.array(bolus)
+
+    uIs = timestamp_arr(bolus, t, fill = None)
+    patient.full_reset()
+    info = patient.simulate(ds = meal_arr, uIs = uIs)
+    patient.full_reset()
+    opt = optimize_pid(patient, meal_arr, uIs)
+    patient.full_reset()
+    info_opt = patient.simulate(ds = meal_arr, uIs = uIs)
+    patient.full_reset()
+    return bolus, info, info_opt, opt
