@@ -614,7 +614,8 @@ def baseline_patient(patient_type = 1, model = "HM", **kwargs):
 
 
 
-p0=baseline_patient(patient_type=0,model="HM",pancreas_n=20)
-ds=0.001*np.random.rand(24*60*5)+1
+p0=baseline_patient(patient_type=1,model="HM",pancreas_n=20)
+ds=0.1*np.random.rand(24*60*5)
 info=p0.simulate(ds=ds)
-p0.statePlot(info, (2,3), (20, 20), [["G"],["Q1","Q2"],["I"],["uI", "uP"], ["x1", "x2"],["x3"]], 7,days=True)
+p0.statePlot(info, (2,3), (20, 20), [["G"],["Q1","Q2"],["I"],["uI","uP"], ["x1", "x2"],["x3"]], 7,days=True)
+p0.hist(info["G"])
