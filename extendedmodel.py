@@ -375,7 +375,7 @@ class Patient(ODE):
             elif 10 <=G<13:
                 bin_place[i]=5
             elif 13<=G:
-                bin_place[i]=Gbar_s
+                bin_place[i]=6
         plt.figure(figsize=(10,10))
         n,bins,patches=plt.hist(bin_place,bins=range(8),orientation="horizontal",align="left",density=True)
         colors=["#020249","#050578","#3c3cf4","#00FF7F","#f82828","#7e0202","#5a0000"]
