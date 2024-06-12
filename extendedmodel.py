@@ -474,7 +474,7 @@ class Patient(ODE):
                 bin_place[i]=1
             elif self.Gmin<=G<self.Gbar-0.5:
                 bin_place[i]=2
-            elif self.Gbar-0.5<=self.Gbar+0.5:
+            elif self.Gbar-0.5<=G<self.Gbar+0.5:
                 bin_place[i]=3
             elif self.Gbar+0.5<=G<10:
                 bin_place[i]=4
