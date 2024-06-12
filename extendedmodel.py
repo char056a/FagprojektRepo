@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 from odeclass import ODE
 import pancreas
-from scipy.optimize import root_scalar, minimize_scalar
+from scipy.optimize import root_scalar, minimize_scalar, minimize
 import utils
 
 with open('config.json', 'r') as f:
@@ -375,14 +375,23 @@ class Patient(ODE):
             plt.show()
         return phi, p, Gt
     
-    def best_bolus(self, meal_size, min_bolus = 0, max_bolus = 15000, splits = 10,  h = 24):
+    def best_bolus(self, meal_size, min_bolus = 0, max_bolus = 15000, n = 10,  h = 24):
+        """Finds optimal bolus given meal size.
+        First checks penalty at a few boluses size in a wide range, and selects the one with the minimum penalty.
+        Then searches for minimum around that point.
+        
+        Parameters
+        ----------
+        meal_size : Grams of carbs ingested. Several values can be passed at once.
+        min_bolus : minimum dose to include in intial check.
+        max_bolus : maximum dose to include in initial check.
+        n : number of points to check in initial check (Will check np.linspace(min_bolus, max_bolus, n)).
+        h : number of hours to run simulation for
         """
-        Finds optimals 
-        """
-        if isinstance(meal_size, (np.ndarray, list)):
+        if isinstance(meal_size, (np.ndarray, list, tuple)):
             return np.array([self.best_bolus(meal_size=m, h = h) for m in meal_size])
         # broad and rough search for minima
-        us = np.linspace(0, max_bolus, splits)
+        us = np.linspace(min_bolus, max_bolus, n)
         phis = []
         for u in us:
             phi, _, _ = self.bolus_sim(u, meal_size = meal_size, h = h)
@@ -392,22 +401,19 @@ class Patient(ODE):
         def cost(u):
             phi, _, _ = self.bolus_sim(u, meal_size = meal_size, h = h)
             return phi
-        return minimize_scalar(cost, bounds=[u0 - max_bolus/splits, u0 + max_bolus/splits]).x
+        return minimize_scalar(cost, bounds=[u0 - (max_bolus-min_bolus)/n, u0 + (max_bolus-min_bolus)/n]).x
 
 
-    def dense_meal_bolus(self, meal_size = 0, min_U = 0, max_U = 100, n = 50, h = 24):
-        Us = np.linspace(min_U, max_U, n)
-        phi_best = 10**18
-        for j, U in enumerate(Us):
+    def dense_meal_bolus(self, meal_size = 0, min_bolus = 0, max_bolus = 15000, n = 50, h = 24):
+        if isinstance(meal_size, (np.ndarray, list, tuple)):
+            return np.array([self.dense_meal_bolus(meal_size=m, h = h) for m in meal_size])
+        us = np.linspace(min_bolus, max_bolus, n)
+        phis = np.array([])
+        for j, u in enumerate(us):
             self.full_reset()
-            phi, p, Gt = self.bolus_sim(U, meal_size, meal_idx=0, h=h)
-            if phi < phi_best:
-                p_best = p
-                G_best = Gt
-                phi_best = phi
-                best_u = U
-        self.full_reset()
-        return best_u, phi_best, p_best, G_best
+            phi, _, _ = self.bolus_sim(u, meal_size, meal_idx=0, h=h)
+            phis = np.append(phis, phi)
+        return phis
 
 
     def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 50, min_meal = 20, max_meal = 150, n = 50, h = 24):
@@ -422,7 +428,70 @@ class Patient(ODE):
         best = np.argmin(res, axis=0)
         best_us = [Us[n - 1- i] for i in best]
         return meals, best_us, res
+    
+    def optimize_pid(self, meal_arr, uIs):
+        pid_keys =  ["Kp", "Ti", "Td"]
+        def cost(params):
+            self.full_reset()
+            for i,k in enumerate(pid_keys):
+                setattr(self.pumpObj, k, params[i])
+            info = self.simulate(ds = meal_arr, uIs = uIs)
+            return info["pens"].sum()
+        res = minimize(cost, [getattr(self.pumpObj, i) for i in pid_keys], method="CG")
+        for i,k in enumerate(pid_keys):
+            setattr(self, k, res.x[i])
+        return res
 
+
+
+    def plan_treatment(self, meals):
+        t = self.timestep
+        meal_arr = utils.timestamp_arr(meals, t, fill = 0)
+        bolus = []
+        for m in meals:
+            u = self.best_bolus(meal_size = m[0])
+            bolus.append([u, m[1]])
+        bolus = np.array(bolus)
+        uIs = utils.timestamp_arr(bolus, t, fill = None)
+        self.full_reset()
+        info = self.simulate(ds = meal_arr, uIs = uIs)
+        self.full_reset()
+        opt = self.optimize_pid(meal_arr, uIs)
+        self.full_reset()
+        info_opt = self.simulate(ds = meal_arr, uIs = uIs)
+        self.full_reset()
+        return bolus, info, info_opt, opt
+
+
+    def hist(self,G_arr):
+        Gbar_s=str(np.round(self.Gbar,3))
+        Gmin_s=str(np.round(self.Gmin,3))
+        bin_place=np.empty(len(G_arr))
+        for i, G in enumerate(G_arr):
+            if G<3:
+                bin_place[i]=0
+            elif 3<=G<self.Gmin:
+                bin_place[i]=1
+            elif self.Gmin<=G<self.Gbar-0.5:
+                bin_place[i]=2
+            elif self.Gbar-0.5<=self.Gbar+0.5:
+                bin_place[i]=3
+            elif self.Gbar+0.5<=G<10:
+                bin_place[i]=4
+            elif 10 <=G<13:
+                bin_place[i]=5
+            elif 13<=G:
+                bin_place[i]=6
+        plt.figure(figsize=(10,10))
+        n,bins,patches=plt.hist(bin_place,bins=range(8),orientation="horizontal",align="left",density=True)
+        colors=["#020249","#050578","#3c3cf4","#00FF7F","#f82828","#7e0202","#5a0000"]
+        for c, p in zip(colors, patches):
+            p.set_facecolor(c)
+        plt.yticks(ticks=[0,1,2,3,4,5,6],labels=["Very high (13 < G )","high ( 10 < G <13)","Moderately high (" +Gbar_s+ " + 0.5 < G < 10)","Ideal (" +Gbar_s+" -0.5 < G < " +Gbar_s+" +0.5)","moderately low (" +Gmin_s+ " < G <"+  Gbar_s + "-0.5)","Low (3 < G <"+ Gmin_s+")","very low (G < 3)"])
+        plt.tick_params(axis='y', labelsize=5)
+        plt.title("Percent of time spent at different glucose levels      Steady state G is " + Gbar_s)
+        plt.show()
+        return
 
     def statePlot(self,infodict,shape,size,keylist,fonts):
 

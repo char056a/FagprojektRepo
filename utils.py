@@ -1,6 +1,5 @@
 from scipy.optimize import minimize
 import numpy as np
-from extendedmodel import *
 from pancreas import *
 
 
@@ -90,39 +89,3 @@ def generate_table(meals, bolus):
         inner += row1 + row2 + row3
     return "\\begin{table}[]\n\\begin{tabular}{|"+"".join(["r|" for i in range(n)])+"}\\hline \n"+inner+"\\end{tabular}\n\\end{table}"
 
-def optimize_pid(patient, meal_arr, uIs):
-    pid_keys =  ["Kp", "Ti", "Td"]
-    def cost(params):
-        patient.full_reset()
-        for i,k in enumerate(pid_keys):
-            setattr(patient.pumpObj, k, params[i])
-        info = patient.simulate(ds = meal_arr, uIs = uIs)
-        return info["pens"].sum()
-    res = minimize(cost, [getattr(patient.pumpObj, i) for i in pid_keys], method="CG")
-    for i,k in enumerate(pid_keys):
-        setattr(patient, k, res.x[i])
-    return res
-
-
-
-def plan_treatment(patient, meals):
-    t = patient.timestep
-    
-    meal_arr = timestamp_arr(meals, t, fill = 0)
-
-    bolus = []
-    for m in meals:
-        u = patient.best_bolus(meal_size = m[0])
-        bolus.append([u, m[1]])
-
-    bolus = np.array(bolus)
-
-    uIs = timestamp_arr(bolus, t, fill = None)
-    patient.full_reset()
-    info = patient.simulate(ds = meal_arr, uIs = uIs)
-    patient.full_reset()
-    opt = optimize_pid(patient, meal_arr, uIs)
-    patient.full_reset()
-    info_opt = patient.simulate(ds = meal_arr, uIs = uIs)
-    patient.full_reset()
-    return bolus, info, info_opt, opt
