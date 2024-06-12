@@ -584,7 +584,7 @@ class Patient(ODE):
                     ax[i].set_xlim(0,infodict["t"][:max_l][-1]/60)
                     ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/60,5))
                     ax[i].tick_params(axis='x', labelsize=5)
-                ax[i].legend(loc="lower left")
+                ax[i].legend(loc="upper right")
         plt.show()
         fig.tight_layout()
         return
