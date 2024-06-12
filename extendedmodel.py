@@ -493,7 +493,7 @@ class Patient(ODE):
         plt.show()
         return
 
-    def statePlot(self,infodict,shape,size,keylist,fonts):
+    def statePlot(self,infodict,shape,size,keylist,fonts=7,days=False):
 
         """ 
         Makes plot of different states. 
@@ -563,28 +563,32 @@ class Patient(ODE):
 
             }
         }
+        if days==True:
+            days=24
+        else:
+            days=1
         
         for i,l in enumerate(keylist):
-                title=""
-                for c, k in enumerate(l):
-                    if c==0:
-                        title+=titles[self.model][k][0]
-                    elif 0 < c < len(l)-1:
-                        title+=", " + titles[self.model][k][0]
-                    elif c==len(l)-1:
-                        title+=" and "+titles[self.model][k][0]
-                    max_l = min(len(infodict["t"]), len(infodict[k]))
+            title=""
+            for c, k in enumerate(l):
+                if c==0:
+                    title+=titles[self.model][k][0]
+                elif 0 < c < len(l)-1:
+                    title+=", " + titles[self.model][k][0]
+                elif c==len(l)-1:
+                    title+=" and "+titles[self.model][k][0]
+                max_l = min(len(infodict["t"]), len(infodict[k]))
 
-                    if k=="G":
-                        ax[i].plot(infodict["t"][:max_l]/60, self.Gmin*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
-                    ax[i].plot((infodict["t"][:max_l])/60,infodict[k][:max_l],".",label=k,color=colorlist[c])
-                    ax[i].set_title(title,fontsize=fonts)
-                    ax[i].set_xlabel("Time [h]",fontsize=fonts)
-                    ax[i].set_ylabel(titles[self.model][k][1])
-                    ax[i].set_xlim(0,infodict["t"][:max_l][-1]/60)
-                    ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/60,5))
-                    ax[i].tick_params(axis='x', labelsize=5)
-                ax[i].legend(loc="upper right")
+                if k=="G":
+                    ax[i].plot(infodict["t"][:max_l]/(60*days), self.Gmin*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
+                ax[i].plot((infodict["t"][:max_l])/(60*days),infodict[k][:max_l],".",label=k,color=colorlist[c])
+                ax[i].set_title(title,fontsize=fonts)
+                ax[i].set_xlabel("Time [Days]",fontsize=fonts)
+                ax[i].set_ylabel(titles[self.model][k][1])
+                ax[i].set_xlim(0,infodict["t"][:max_l][-1]/(60*days))
+                ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/(60*days),5))
+                ax[i].tick_params(axis='x', labelsize=5)
+                ax[i].legend(loc="best")
         plt.show()
         fig.tight_layout()
         return
@@ -607,3 +611,10 @@ def baseline_patient(patient_type = 1, model = "HM", **kwargs):
         for key in patient.state_keys: # also set "x0" values
             setattr(patient, key+"0", getattr(patient, key))
         return patient
+
+
+
+p0=baseline_patient(patient_type=0,model="HM",pancreas_n=20)
+ds=0.001*np.random.rand(24*60*5)+1
+info=p0.simulate(ds=ds)
+p0.statePlot(info, (2,3), (20, 20), [["G"],["Q1","Q2"],["I"],["uI", "uP"], ["x1", "x2"],["x3"]], 7,days=True)
