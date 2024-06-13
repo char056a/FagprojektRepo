@@ -578,10 +578,11 @@ class Patient(ODE):
                 ax[i].plot((infodict["t"][:max_l])/(60*days),infodict[k][:max_l],".",label=k,color=colorlist[c])
                 ax[i].set_title(title,fontsize=fonts)
                 ax[i].set_xlabel("Time [Days]",fontsize=fonts)
-                ax[i].set_ylabel(titles[self.model][k][1])
+                ax[i].set_ylabel(titles[self.model][k][1],fontsize=fonts)
                 ax[i].set_xlim(0,infodict["t"][:max_l][-1]/(60*days))
                 ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/(60*days),5))
                 ax[i].tick_params(axis='x', labelsize=5)
+                ax[i].tick_params(axis='y', labelsize=5)
                 ax[i].legend(loc="best")
         plt.show()
         fig.tight_layout()
@@ -608,8 +609,8 @@ def baseline_patient(patient_type = 1, model = "HM", **kwargs):
 
 
 
-p0=baseline_patient(patient_type=1,model="HM",pancreas_n=20)
-ds=0.1*np.random.rand(24*60*5)
+p0=baseline_patient(patient_type=0,model="HM",pancreas_n=20)
+ds=0.1*np.random.normal(size=24*60*5)
 info=p0.simulate(ds=ds)
-p0.statePlot(info, (2,3), (20, 20), [["G"],["Q1","Q2"],["I"],["uI","uP"], ["x1", "x2"],["x3"]], 7,days=True)
+p0.statePlot(info, (2,3), (22, 22), [["G"],["Q1","Q2"],["I"],["uI","uP"], ["x1", "x2"],["x3"]], 7,days=True)
 p0.hist(info["G"])
