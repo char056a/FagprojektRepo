@@ -427,36 +427,30 @@ class Patient(ODE):
 
 
     def hist(self,G_arr):
-        Gbar_s=str(np.round(self.Gbar,3))
-        Gmin_s=str(np.round(self.Gmin,3))
         bin_place=np.empty(len(G_arr))
         for i, G in enumerate(G_arr):
-            if G<3:
+            if G <= 3:
                 bin_place[i]=0
-            elif 3<=G<self.Gmin:
+            elif 3<G<=3.9:
                 bin_place[i]=1
-            elif self.Gmin<=G<self.Gbar-0.5:
+            elif 3.9 < G <= 10:
                 bin_place[i]=2
-            elif self.Gbar-0.5<=self.Gbar+0.5:
+            elif 10 < G <= 13.9:
                 bin_place[i]=3
-            elif self.Gbar+0.5<=G<10:
-                bin_place[i]=4
-            elif 10 <=G<13:
-                bin_place[i]=5
-            elif 13<=G:
-                bin_place[i]=6
+            elif 13.9 < G:
+                bin_place=4
         plt.figure(figsize=(10,10))
-        n,bins,patches=plt.hist(bin_place,bins=range(8),orientation="horizontal",align="left",density=True)
-        colors=["#020249","#050578","#3c3cf4","#00FF7F","#f82828","#7e0202","#5a0000"]
+        n,bins,patches=plt.hist(bin_place,bins=range(6),orientation="horizontal",align="left",density=True)
+        colors=["#020249","#088ccd","#00FF7F","#78064d","#5a0000"]
         for c, p in zip(colors, patches):
             p.set_facecolor(c)
-        plt.yticks(ticks=[0,1,2,3,4,5,6],labels=["Very high (13 < G )","high ( 10 < G <13)","Moderately high (" +Gbar_s+ " + 0.5 < G < 10)","Ideal (" +Gbar_s+" -0.5 < G < " +Gbar_s+" +0.5)","moderately low (" +Gmin_s+ " < G <"+  Gbar_s + "-0.5)","Low (3 < G <"+ Gmin_s+")","very low (G < 3)"])
-        plt.tick_params(axis='y', labelsize=5)
-        plt.title("Percent of time spent at different glucose levels      Steady state G is " + Gbar_s)
+        plt.yticks(ticks=[0,1,2,3,4],labels=[" Very high \n (13.9 < G) ", "High \n (10 < G < 13.9) ", "Target \n (3.9 < G 10)", "Low \n (3 < G < 3.9)", "Very low \n (G < 3)"])
+        plt.tick_params(axis='y', labelsize=8)
+        plt.title("Percentage of time spent in different blood glucose ranges")
         plt.show()
         return
 
-    def statePlot(self,infodict,shape,size,keylist,fonts):
+    def statePlot(self,infodict,shape,size,keylist,fonts=7,days=False):
 
         """ 
         Makes plot of different states. 
@@ -526,28 +520,33 @@ class Patient(ODE):
 
             }
         }
+        if days==True:
+            days=24
+        else:
+            days=1
         
         for i,l in enumerate(keylist):
-                title=""
-                for c, k in enumerate(l):
-                    if c==0:
-                        title+=titles[self.model][k][0]
-                    elif 0 < c < len(l)-1:
-                        title+=", " + titles[self.model][k][0]
-                    elif c==len(l)-1:
-                        title+=" and "+titles[self.model][k][0]
-                    max_l = min(len(infodict["t"]), len(infodict[k]))
+            title=""
+            for c, k in enumerate(l):
+                if c==0:
+                    title+=titles[self.model][k][0]
+                elif 0 < c < len(l)-1:
+                    title+=", " + titles[self.model][k][0]
+                elif c==len(l)-1:
+                    title+=" and "+titles[self.model][k][0]
+                max_l = min(len(infodict["t"]), len(infodict[k]))
 
-                    if k=="G":
-                        ax[i].plot(infodict["t"][:max_l]/60, self.Gmin*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
-                    ax[i].plot((infodict["t"][:max_l])/60,infodict[k][:max_l],".",label=k,color=colorlist[c])
-                    ax[i].set_title(title,fontsize=fonts)
-                    ax[i].set_xlabel("Time [h]",fontsize=fonts)
-                    ax[i].set_ylabel(titles[self.model][k][1])
-                    ax[i].set_xlim(0,infodict["t"][:max_l][-1]/60)
-                    ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/60,5))
-                    ax[i].tick_params(axis='x', labelsize=5)
-                ax[i].legend(loc="lower left")
+                if k=="G":
+                    ax[i].plot(infodict["t"][:max_l]/(60*days), self.Gmin*np.ones(max_l),"--",color="#998F85",label="minimum glucose")
+                ax[i].plot((infodict["t"][:max_l])/(60*days),infodict[k][:max_l],".",label=k,color=colorlist[c])
+                ax[i].set_title(title,fontsize=fonts)
+                ax[i].set_xlabel("Time [Days]",fontsize=fonts)
+                ax[i].set_ylabel(titles[self.model][k][1],fontsize=fonts)
+                ax[i].set_xlim(0,infodict["t"][:max_l][-1]/(60*days))
+                ax[i].set_xticks(np.linspace(0,infodict["t"][:max_l][-1]/(60*days),5))
+                ax[i].tick_params(axis='x', labelsize=5)
+                ax[i].tick_params(axis='y', labelsize=5)
+                ax[i].legend(loc="best")
         plt.show()
         fig.tight_layout()
         return
