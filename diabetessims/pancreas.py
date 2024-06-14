@@ -1,11 +1,11 @@
 import numpy as np
-from odeclass import ODE
+from diabetessims.odeclass import ODE
 import json
 
     
 class PKPM(ODE):
     def __init__(self, patient_type = 0, Gbar = None, **kwargs):
-        with open('config.json', 'r') as f:
+        with open('diabetessims/config.json', 'r') as f:
             defaults = json.load(f)["PKPM"]
 
         if patient_type == 2 :
@@ -148,8 +148,3 @@ class PID(ODE):
         self.yprev = y 
         self.I += dI * self.timestep # Updates integral term
         return res        
-
-p = PKPM()
-p.ode(6)
-p.eval(6)
-

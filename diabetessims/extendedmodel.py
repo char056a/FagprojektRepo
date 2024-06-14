@@ -2,46 +2,16 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 from scipy.integrate import simpson
-from odeclass import ODE
-import pancreas
+from diabetessims.odeclass import ODE
+import diabetessims.pancreas as pancreas
 from scipy.optimize import root_scalar, minimize_scalar, minimize
-import utils
+import diabetessims.utils as utils
 
-with open('config.json', 'r') as f:
-    standard_params = json.load(f) # reads json file "config.json"
+def penalty_func1(p, G):
+    return  1/2 * (18 * (G - p.Gbar))**2 + p.kappa/2 * utils.ReLU(18*(p.Gmin - G))**2
 
-def glucose_penalty(G, Gbar = None, kappa = None, Gmin = None ):
-    """
-    Calculates penalty given blood glucose.
-    p = 1/2 (G - Gbar)**2 + kappa/2 * max(Gmin - G, 0)**2
-
-    Parameters
-    ----------
-    Gbar : int or float 
-        Desired blood glucose
-    kappa : int or float 
-        Penalty weight
-    Gmin : int or float
-        Threshold for hypoglycemia
-    G : int, float, np.ndarray, list, default: None
-        Glucose to evaluate penalty for. If not set, use current state.
-    
-    Returns
-    -------
-    p(G) : float or np.ndarray
-        Penalty
-    """
-    # use defaults from config.json
-    if Gbar is None:
-        Gbar = standard_params["general"].get("Gbar")
-    if kappa is None:
-        kappa = standard_params["general"].get("kappa")
-    if Gmin is None:
-        Gmin = standard_params["general"].get("Gmin")
-    func = lambda g :  1/2 * (18 * (g - Gbar))**2 + kappa/2 * max((18*(Gmin - g)), 0)**2
-    if isinstance(G, (np.ndarray, list)):
-        return np.array([func(Gi) for Gi in G])
-    return func(G)
+def penalty_func2(p, G):
+    return 1/2 * utils.ReLU(18 * ((p.Gbar - 1) - G))**2 + 1/2 * utils.ReLU(18 * (G - (p.Gbar + 1)))**2 + p.kappa/2 * utils.ReLU(18*(p.Gmin - G))**2
 
 def MVP(p, d = 0, uI = 0, uP = 0, HR = None):
     """
@@ -160,8 +130,8 @@ def HM_steadystate(p, uP = 0, G = None):
     x3 = k3 * I
 
     Q2 = x1 * Q1/(p.k12 + x2)
-    S1 = S2 = uI * p.taus
-    x0 = np.array([G, G, Q1, Q2, S1, S2, I, x1, x2, x3, 0, 0])
+    S = uI * p.taus
+    x0 = np.array([G, G, Q1, Q2, S, S, I, x1, x2, x3, 0, 0])
     return x0, uI
 
 def HM_G_from_u(p, u):
@@ -190,7 +160,7 @@ class Patient(ODE):
         self.model = model.upper()
         self.type = patient_type
         defaults = {} #tomt dictionary 
-        with open('config.json', 'r') as f:
+        with open('diabetessims/config.json', 'r') as f:
             data = json.load(f) #læs json-fil
         defaults.update(data["general"]) #tilføj "general" til dictionary(defaults)
         defaults.update(data[self.model]) #tilføj modelegenskaberne til dictionary(defaults)
@@ -206,6 +176,8 @@ class Patient(ODE):
             self.pancreasObj = pancreas.PKPM(patient_type = patient_type, timestep=self.timestep/self.pancreas_n, Gbar=self.Gbar, **kwargs.get("pancreas_param", {}))
         if patient_type != 0:
             self.pumpObj = pancreas.PID(Kp = self.Kp, Td = self.Td, Ti = self.Ti, ybar = self.Gbar, timestep=self.timestep)
+
+        self.default_penalty = 1
 
     def pump(self, G = None):
         if self.type == 0:
@@ -243,7 +215,7 @@ class Patient(ODE):
             return MVP_G_from_u(self, u)
         return
 
-    def glucose_penalty(self, G = None):
+    def glucose_penalty(self, G = None, pen_func  = None):
         """
         Calculates penalty given blood glucose.
         p = 1/2 (G - Gbar)**2 + kappa/2 * max(Gmin - G, 0)**2
@@ -266,9 +238,12 @@ class Patient(ODE):
         """
         if G is None: # If G is not specified, use current G
             G = self.G
-        func = lambda g :  1/2 * (18 * (g - self.Gbar))**2 + self.kappa/2 * max((18*(self.Gmin - g)), 0)**2
-        if isinstance(G, (np.ndarray, list)):
-            return np.array([func(Gi) for Gi in G])
+        if pen_func is None:
+            pen_func = self.default_penalty
+        if pen_func == 1:
+            func = lambda g: penalty_func1(self, g)
+        if pen_func == 2:
+            func = lambda g: penalty_func2(self, g)
         return func(G)
  
     def simulate(self, ds = None, uIs = None, uPs = None, iterations = None):
@@ -351,12 +326,16 @@ class Patient(ODE):
         info["pens"]=self.glucose_penalty(info["G"])
         return info
 
-    def bolus_sim(self, bolus, meal_size, meal_idx = 0, h = 24, plot = False):
+    def bolus_sim(self, bolus, meal_size, meal_idx = 0, h = 24, plot = False, PID = False):
         iterations = int(h * 60 / self.timestep)
         ds = np.zeros(iterations)
-        us = np.ones(iterations) * self.us
+        if PID:
+            us = np.empty(iterations)
+            us[:] = np.nan
+        else:
+            us = np.ones(iterations) * self.us
         ds[meal_idx] = meal_size / self.timestep # Ingestion 
-        us[0] += bolus / self.timestep
+        us[0] = bolus / self.timestep + self.us
         info = self.simulate(ds = ds, uIs = us)
         Gt = info["G"]
         p = self.glucose_penalty(Gt)
@@ -375,7 +354,7 @@ class Patient(ODE):
             plt.show()
         return phi, p, Gt
     
-    def best_bolus(self, meal_size, min_bolus = 0, max_bolus = 15000, n = 10,  h = 24):
+    def best_bolus(self, meal_size, min_bolus = 0, max_bolus = 15000, n = 10,  h = 24, PID = False):
         """Finds optimal bolus given meal size.
         First checks penalty at a few boluses size in a wide range, and selects the one with the minimum penalty.
         Then searches for minimum around that point.
@@ -389,12 +368,12 @@ class Patient(ODE):
         h : number of hours to run simulation for
         """
         if isinstance(meal_size, (np.ndarray, list, tuple)):
-            return np.array([self.best_bolus(meal_size=m, h = h) for m in meal_size])
+            return np.array([self.best_bolus(meal_size=m, min_bolus = min_bolus, max_bolus = max_bolus, n = n, h = h, PID = PID) for m in meal_size])
         # broad and rough search for minima
         us = np.linspace(min_bolus, max_bolus, n)
         phis = []
         for u in us:
-            phi, _, _ = self.bolus_sim(u, meal_size = meal_size, h = h)
+            phi, _, _ = self.bolus_sim(u, meal_size = meal_size, h = h, PID = PID)
             phis.append(phi)
         # choose u0 where 
         u0 = us[np.argmin(phis)]
@@ -404,30 +383,16 @@ class Patient(ODE):
         return minimize_scalar(cost, bounds=[u0 - (max_bolus-min_bolus)/n, u0 + (max_bolus-min_bolus)/n]).x
 
 
-    def dense_meal_bolus(self, meal_size = 0, min_bolus = 0, max_bolus = 15000, n = 50, h = 24):
-        if isinstance(meal_size, (np.ndarray, list, tuple)):
-            return np.array([self.dense_meal_bolus(meal_size=m, h = h) for m in meal_size])
+    def dense_meal_bolus(self, meal_size = 0, min_bolus = 0, max_bolus = 15000, n = 50, h = 24, PID = False):
         us = np.linspace(min_bolus, max_bolus, n)
+        if isinstance(meal_size, (np.ndarray, list, tuple)):
+            return np.array([self.dense_meal_bolus(meal_size=m, min_bolus = min_bolus, max_bolus = max_bolus, n = n, h = h, PID = PID)[0] for m in meal_size]), us
         phis = np.array([])
-        for j, u in enumerate(us):
+        for u in us:
             self.full_reset()
             phi, _, _ = self.bolus_sim(u, meal_size, meal_idx=0, h=h)
             phis = np.append(phis, phi)
-        return phis
-
-
-    def optimal_bolus(self, meal_idx = 0, min_U = 0, max_U = 50, min_meal = 20, max_meal = 150, n = 50, h = 24):
-        Us = np.linspace(min_U, max_U, n)
-        meals = np.linspace(min_meal, max_meal, n)
-        res = np.empty((len(meals), len(Us)))
-        for i, d0 in enumerate(meals):
-            for j, U in enumerate(Us):
-                self.full_reset()
-                phi, _, _ = self.bolus_sim(U, d0, meal_idx=meal_idx, h=h)
-                res[n - 1 - j ,i] = phi
-        best = np.argmin(res, axis=0)
-        best_us = [Us[n - 1- i] for i in best]
-        return meals, best_us, res
+        return phis, us
     
     def optimize_pid(self, meal_arr, uIs):
         pid_keys =  ["Kp", "Ti", "Td"]
@@ -437,12 +402,10 @@ class Patient(ODE):
                 setattr(self.pumpObj, k, params[i])
             info = self.simulate(ds = meal_arr, uIs = uIs)
             return info["pens"].sum()
-        res = minimize(cost, [getattr(self.pumpObj, i) for i in pid_keys], method="CG")
+        res = minimize(cost, [getattr(self.pumpObj, i) for i in pid_keys])
         for i,k in enumerate(pid_keys):
             setattr(self, k, res.x[i])
         return res
-
-
 
     def plan_treatment(self, meals):
         t = self.timestep
@@ -597,13 +560,19 @@ def find_ss(model = "HM", **kwargs):
         return G_res-G
     return root_scalar(cost,  bracket= [0.5,20])
 
-def baseline_patient(patient_type = 1, model = "HM", **kwargs):
-        Gbar = kwargs.get("Gbar" , find_ss(model, **kwargs).root)
+def baseline_patient(patient_type = 1, model = "HM", Gbar = None, **kwargs):
+        if Gbar is None:
+            Gbar = find_ss(model, **kwargs).root
         patient = Patient(patient_type = patient_type, model = model, Gbar = Gbar, **kwargs)
         uP = patient.pancreas(Gbar)
         x0, uI = patient.steadystate(uP = uP, G = Gbar)
-        patient.us = max(0,uI)
+        if patient_type != 0:
+            patient.us = max(0,uI)
+        else:
+            patient.us = 0
+        
         patient.update_state(x0) # set to steady state
         for key in patient.state_keys: # also set "x0" values
             setattr(patient, key+"0", getattr(patient, key))
         return patient
+

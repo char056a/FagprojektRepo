@@ -1,6 +1,5 @@
 from scipy.optimize import minimize
 import numpy as np
-from pancreas import *
 
 
 def ReLU(x):
@@ -76,15 +75,14 @@ def generate_table(meals, bolus):
     n = 3
     if bolus.ndim == 2:
         n += bolus.shape[1] - 1
-    inner = "Time & Meal & Bolus Size \\\\ \\hline \n"
+    inner = "Time & Meal size (g) & Bolus Size (mU) \\\\ \\hline \n"
     for m,b in zip(meals, bolus):
         start, end = [f"{str(int(m[i+1])).zfill(2)}:{str(int(60*(m[i+1]%1))).zfill(2)}" for i in range(2)]
-        bol = ""
         row1 = f"{start}-{end} & {int(m[0])} "
         if bolus.ndim == 2:
             row2 = "".join([f"& {int(b[i])} "  for i in range(n-2)]) 
         else:
-            row2 = "% {int(b)}"
+            row2 = f"% {int(b)}"
         row3 = "\\\\ \\hline \n"
         inner += row1 + row2 + row3
     return "\\begin{table}[]\n\\begin{tabular}{|"+"".join(["r|" for i in range(n)])+"}\\hline \n"+inner+"\\end{tabular}\n\\end{table}"
