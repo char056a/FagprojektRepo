@@ -304,19 +304,21 @@ class Patient(ODE):
                 bin_place[i]=1
             elif 3.9 < G <= 6:
                 bin_place[i]=2
-            elif 6 < G <=10:
+            elif 6 < G <=8:
                 bin_place[i]=3
-            elif 10 < G <= 13.9:
+            elif 8 < G <=10:
                 bin_place[i]=4
-            elif 13.9 < G:
+            elif 10 < G <= 13.9:
                 bin_place[i]=5
+            elif 13.9 < G:
+                bin_place[i]=6
         plt.figure(figsize=(10,10))
-        n,bins,patches=plt.hist(bin_place,bins=range(7),orientation="horizontal",align="left",density=True)
-        colors=["#020249","#088ccd","#00ffff","#00ff15","#78064d","#5a0000"]
+        n,bins,patches=plt.hist(bin_place,bins=range(8),orientation="horizontal",align="left",density=True)
+        colors=["#d00606","#f6065e","#00ff15","#0aebe7","#5d88ee","#0a0ac1","#00001c"]
         for c, p in zip(colors, patches):
             p.set_facecolor(c)
-        plt.yticks(ticks=[0,1,2,3,4,5],labels=[" Very high \n (13.9 < G) ", "High \n (10 < G < 13.9) ", "Higher end of healthy \n (6 < G < 10)", "Ideal \n (3.9 < G < 6)", "low \n (3 < G < 3.9)", "Very low \n (G < 3)"])
-        plt.tick_params(axis='y', labelsize=8)
+        plt.yticks(ticks=[6,5,4,3,2,1,0],labels=["(13.9 < G) ", "(10 < G < 13.9) ", " (8 < G < 10)","(6 < G < 8)", " (3.9 < G < 6)", " (3 < G < 3.9)", " (G < 3)"])
+        plt.tick_params(axis='y', labelsize=12)
         plt.title("Percentage of time spent in different blood glucose ranges")
         plt.show()
         return
