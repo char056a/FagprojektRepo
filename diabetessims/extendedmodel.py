@@ -312,7 +312,7 @@ class Patient(ODE):
                 bin_place[i]=5
         plt.figure(figsize=(10,10))
         n,bins,patches=plt.hist(bin_place,bins=range(7),orientation="horizontal",align="left",density=True)
-        colors=["#020249","#088ccd","#00FF7F","#ff00f7","#78064d","#5a0000"]
+        colors=["#020249","#088ccd","#00ffff","#00ff15","#78064d","#5a0000"]
         for c, p in zip(colors, patches):
             p.set_facecolor(c)
         plt.yticks(ticks=[0,1,2,3,4,5],labels=[" Very high \n (13.9 < G) ", "High \n (10 < G < 13.9) ", "High (but healthy) \n (6 < G < 10)", "Ideal \n (3.9 < G < 6)", "low \n (3 < G < 3.9)", "Very low \n (G < 3)"])
