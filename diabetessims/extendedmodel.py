@@ -315,7 +315,7 @@ class Patient(ODE):
         colors=["#020249","#088ccd","#00ffff","#00ff15","#78064d","#5a0000"]
         for c, p in zip(colors, patches):
             p.set_facecolor(c)
-        plt.yticks(ticks=[0,1,2,3,4,5],labels=[" Very high \n (13.9 < G) ", "High \n (10 < G < 13.9) ", "High (but healthy) \n (6 < G < 10)", "Ideal \n (3.9 < G < 6)", "low \n (3 < G < 3.9)", "Very low \n (G < 3)"])
+        plt.yticks(ticks=[0,1,2,3,4,5],labels=[" Very high \n (13.9 < G) ", "High \n (10 < G < 13.9) ", "Higher end of healthy \n (6 < G < 10)", "Ideal \n (3.9 < G < 6)", "low \n (3 < G < 3.9)", "Very low \n (G < 3)"])
         plt.tick_params(axis='y', labelsize=8)
         plt.title("Percentage of time spent in different blood glucose ranges")
         plt.show()
