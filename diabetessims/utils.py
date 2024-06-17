@@ -5,6 +5,12 @@ import numpy as np
 def ReLU(x):
     return x * (x > 0)
 
+def cohen_coon(ybar, t, delay):
+        Kp = t/(ybar * delay) * (4/3 + delay/(4 * t))
+        Ti = delay * (32 + 6 * delay/t)/(13+8*delay/t)
+        Td = 4 * delay / (11 + 2*delay / t)
+        return Kp, Ti, Td
+
 def piecewise_linear(b1, a1, b2, a2, x_split):
     def func(x):
         if x < x_split:
@@ -87,3 +93,16 @@ def generate_table(meals, bolus):
         inner += row1 + row2 + row3
     return "\\begin{table}[]\n\\begin{tabular}{|"+"".join(["r|" for i in range(n)])+"}\\hline \n"+inner+"\\end{tabular}\n\\end{table}"
 
+
+class Wrapper:
+    def __init__(self, mod, instance):
+        self.mod = mod
+        self.instance = instance
+
+    def __getattr__(self, name):
+        func = getattr(self.mod, name)
+        if callable(func):
+            def wrapper(*args, **kwargs):
+                return func(self.instance, *args, **kwargs)
+            return wrapper
+        return func

@@ -39,8 +39,7 @@ class PKPM(ODE):
         N = kwargs.get("N", self.N)
         return self.W * max(I0 * rho * DIR * f * N,0) # do not let isr be negative
 
-
-    def ode(self, G):
+    def get_dependant_vars(self, G):
         if G <= self.Gl: # if glucose is low
             alpha2 = 0
             idx = 0 # use first value for params with two values
@@ -50,9 +49,17 @@ class PKPM(ODE):
                 alpha2 = self.hhat * (G - self.Gl)/(self.Gu - self.Gl) 
             else: # if glucose is above the upper level
                 alpha2 = self.hhat
+        alpha1 = self.alpha1[idx]
+        delta1 = self.delta1[idx]
+        v = self.v[idx]
+        return v, delta1, alpha1, alpha2
+
+
+    def sys(self, G):
+        v, delta1, alpha1, alpha2 = self.get_dependant_vars(G)
         # ode
-        dM = self.alpha1[idx] - self.delta1[idx] * self.M
-        dP = self.v[idx] * self.M - self.delta2 * self.P - self.k * self.P * self.rho * self.DIR
+        dM = alpha1 - delta1 * self.M
+        dP = v * self.M - self.delta2 * self.P - self.k * self.P * self.rho * self.DIR
         dR =  self.k * self.P * self.rho * self.DIR - self.gamma * self.R
         dgamma = self.eta * (-self.gamma + self.gammab + alpha2)
         dD = self.gamma * self.R - self.k1p * (self.CT - self.DIR) * self.D + self.k1m * self.DIR
@@ -64,21 +71,13 @@ class PKPM(ODE):
 
 
     def steadystate(self, G):
-        if G <= self.Gl: # if glucose is low
-            alpha2 = 0
-            idx = 0 # use first value for params with two values
-        else: # if glucose is high
-            idx = 1 # use second value for params with two values
-            if G <= self.Gu: # if glucose is below the upper level
-                alpha2 = self.hhat * (G - self.Gl)/(self.Gu - self.Gl) 
-            else: # if glucose is above the upper level
-                alpha2 = self.hhat
+        v, delta1, alpha1, alpha2 = self.get_dependant_vars(G)
         # ode
-        M = self.alpha1[idx]/self.delta1[idx]
+        M = alpha1/delta1
         gamma = self.gammab + alpha2
         rho = self.rhob + self.krho * (gamma - self.gammab)
         P = 1/self.k
-        R = (self.v[idx] * M - P*self.delta2)/gamma
+        R = (v * M - P*self.delta2)/gamma
         DIR = R * gamma / rho
         D = (self.k1m * DIR + rho * DIR)/ (self.k1p * (self.CT - DIR))
         x0 = np.array([M, P, R, gamma, D, DIR, rho])
@@ -87,7 +86,7 @@ class PKPM(ODE):
     
 
     def eval(self, G):
-        dx, ISR = self.ode(G)
+        dx, ISR = self.sys(G)
         x_new = dx * self.timestep + self.get_state()
         x_new = x_new * (x_new > 0)
         self.update_state(x_new)
