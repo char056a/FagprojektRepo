@@ -74,7 +74,7 @@ def filter(arr, minval=None, maxval=None):
                 x[i] = x[(i-1)%n]
     return x
 
-def generate_table(meals, bolus):
+def generate_table(meals, bolus = None):
     bolus = bolus.T
     start = meals[:, 1] 
     end = meals[:, 2]

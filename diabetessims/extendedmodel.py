@@ -37,24 +37,25 @@ class Patient(ODE):
         self.default_penalty = 1
 
     def pump(self, G = None):
+        """Get insulin injection rate from pump"""
         if self.type == 0:
             return 0
         if G is None:
             G == self.Gsc
         return max(0, self.pumpObj.eval(G) + self.us)
     
-    def pancreas(self, G, update = True):
+    def pancreas(self, G):
+        """Get ISR from pancreas"""
         if self.type == 1:
             return 0
         u = 0
-        if update:
-            for i in range(self.pancreas_n):
-                u += self.pancreasObj.eval(G)
-            return max(0, u/self.pancreas_n)
-        else:
-            return self.pancreasObj.sys(G)
+        for i in range(self.pancreas_n):
+            u += self.pancreasObj.eval(G)
+        return max(0, u/self.pancreas_n)
+
         
     def full_reset(self):
+        """Reset state of Patient, pump and/or pancreas."""
         self.reset()
         if self.type != 1:
             self.pancreasObj.reset()
@@ -62,48 +63,55 @@ class Patient(ODE):
             self.pumpObj.reset()
 
     def steadystate(self, G = None, uI = None, uP = 0):
-            return self.mod.steadystate(G = G, uI = uI, uP=uP)
+        """Return steady state vector and insulin injection rate to maintain it.
+        Can be calculated from either G or uI.
+        If G and uI are both None, determines steady state where G is Gbar.
+        """
+        return self.mod.steadystate(G = G, uI = uI, uP=uP)
 
 
     def ss(self, uI = 0, uP = 0):
-            return self.mod.ss(uI = uI, uP=uP)
+        """Return steady state vector for given insulin rates."""
+        return self.mod.ss(uI = uI, uP=uP)
 
     def ssinv(self, G = None, uP = 0):
-            return self.mod.ssinv(G = G, uP=uP)
+        """Returns insulin injection rate required to achieve steady state with given G.
+        If G is None, use Gbar.
+        """
+        return self.mod.ssinv(G = G, uP=uP)
 
     def f_func(self, d = 0, uI = 0, uP = 0):
+        """
+        Solves dx = f(x, u, d)
+
+        Parameters
+        ----------
+        d (number) : meal ingestion rate
+        uI (number) : insulin injection rate.
+        uP (number) : insulin secretion rate from pancreas
+        
+        Returns
+        -------
+        dx (numpy array) : solution to system of differential equations. 
+        """
         return self.mod.sys(d = d, uI = uI, uP = uP)
     
     def G_from_u(self, u):
+        """Returns G of steady state with given insulin rate (uI + uP)"""
         return self.mod.G_from_u(u)
 
     def set_PID_params(self, params):
+        """Sets the parameters of the pump object. Should be given as params = [Kp, Ti, Td]"""
+        if self.type == 0:
+            print("Patient of type 0 has no pump.")
+            return
         self.pumpObj.Kp = params[0]
         self.pumpObj.Ti = params[1]
         self.pumpObj.Td = params[2]
         return
 
     def glucose_penalty(self, G = None, pen_func  = None):
-        """
-        Calculates penalty given blood glucose.
-        p = 1/2 (G - Gbar)**2 + kappa/2 * max(Gmin - G, 0)**2
-
-        Parameters
-        ----------
-        Gbar : int or float 
-            Desired blood glucose
-        kappa : int or float 
-            Penalty weight
-        Gmin : int or float
-            Threshold for hypoglycemia
-        G : int, float, np.ndarray, list, default: None
-            Glucose to evaluate penalty for. If not set, use current state.
-        
-        Returns
-        -------
-        p(G) : float
-            Penalty
-        """
+        """Calculates penalty given blood glucose."""
         if G is None: # If G is not specified, use current G
             G = self.G
         if pen_func is None:
@@ -115,24 +123,23 @@ class Patient(ODE):
         return func(G)
  
     def simulate(self, ds = None, uIs = None, uPs = None, iterations = None):
-        """
-        Simulates patient.
+        """Simulates patient.
 
         Parameters
         ----------
-        ds : numpy array
-            Ingestion rate
-        u_func : Default = None, int, float, numpy array, list or "PID"
-            Specifies insulin injection rate.
-            If None; uses steady state insulin rate.
-            If "PID"; uses PID controller.
+        ds : Ingestion rate. Defaults to zero.
+        uIs : Insulin injection rate. Defaults to None.
+        uPs : Insulin secretion rate. Defaults to None.
+        iterations : Number of iterations. Defaults to length of longest array in {ds, uIs, uPs}, or a number such that the simulation is 24h long.
+
+        The arrays, ds, uIs and uPs, are looped through. In iteration i, the value arr[i%len(arr)] is used. 
+        They can be passed as numbers, where they will be treated as one element arrays.
+        In iterations where uIs[i%len(uIs)] is None, the insulin injection from the pump is used.
+        Same goes for uPs and the pancreas.
         
         Returns
         -------
-        states : numpy array
-            State vector in each time step
-        u_list : numpy array
-            Insulin injection rate for each time step
+        Info dictionary.
         """
         if iterations is None:
             iterations = 0
@@ -191,6 +198,9 @@ class Patient(ODE):
             info["uP"].append(uP)
             info["uI"].append(uI)
             info["d"].append(d)
+        info["uI"] = np.array(info["uI"])
+        info["uP"] = np.array(info["uP"])
+        info["d"] = np.array(info["d"])
         info["pens"]=self.glucose_penalty(info["G"])
         return info
 
@@ -204,6 +214,7 @@ class Patient(ODE):
             us = np.ones(iterations) * self.us
         ds[meal_idx] = meal_size / self.timestep # Ingestion 
         us[0] = bolus / self.timestep + self.us
+        self.full_reset()
         info = self.simulate(ds = ds, uIs = us)
         Gt = info["G"]
         p = self.glucose_penalty(Gt)
@@ -262,7 +273,13 @@ class Patient(ODE):
             phis = np.append(phis, phi)
         return phis, us
     
-    def optimize_pid(self, meal_arr, uIs):
+    def optimize_pid(self, meal_arr, uIs, **kwargs):
+        defaults = {
+            "x0" : [0.5, 100, 10],
+            "bounds" : ((0, None), (0, None), (0, None)),
+            "method" : "Powell"
+        }
+        defaults.update(kwargs)
         pid_keys =  ["Kp", "Ti", "Td"]
         def cost(params):
             self.full_reset()
@@ -270,7 +287,7 @@ class Patient(ODE):
                 setattr(self.pumpObj, k, params[i])
             info = self.simulate(ds = meal_arr, uIs = uIs)
             return info["pens"].sum()
-        res = minimize(cost, [getattr(self.pumpObj, i) for i in pid_keys])
+        res = minimize(cost, **defaults)     
         for i,k in enumerate(pid_keys):
             setattr(self, k, res.x[i])
         self.full_reset()
@@ -423,22 +440,21 @@ class Patient(ODE):
 def find_ss(model, **kwargs): 
     p = Patient(patient_type = 0, model = model, **kwargs)   
     def cost(G):
-        _, u = p.pancreasObj.steadystate(G)
-        G_res = p.G_from_u(u)
-        return G_res-G
-    return root_scalar(cost,  bracket= [0.5,20])
+        _, isr = p.pancreasObj.steadystate(G)
+        u = p.ssinv(G = G)
+        return isr - u
+    return root_scalar(cost,  x0 = 4.8, x1 = 6,bracket = [3, 15], method="secant", xtol = 0.01)
 
 def baseline_patient(patient_type, model, Gbar = None, **kwargs):
         if Gbar is None:
             Gbar = find_ss(model, **kwargs).root
         patient = Patient(patient_type = patient_type, model = model, Gbar = Gbar, **kwargs)
         uP = patient.pancreas(Gbar)
-        x0, uI = patient.steadystate(G = Gbar, uP = uP)
         if patient_type != 0:
-            patient.us = max(0,uI)
+            patient.us = max(0,patient.ssinv(G=Gbar, uP=uP))
         else:
             patient.us = 0
-        
+        x0 = patient.ss(uI = patient.us, uP = uP)
         patient.update_state(x0) # set to steady state
         for key in patient.state_keys: # also set "x0" values
             setattr(patient, key+"0", getattr(patient, key))

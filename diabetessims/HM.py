@@ -28,15 +28,13 @@ def sys(p, d = 0, uI = 0, uP = 0):
 
     Parameters
     ----------
-    u : int or float 
-        Insulin injection rate.
-    d : int or float 
-        Meal ingestion rate.
+    d (number) : meal ingestion rate
+    uI (number) : insulin injection rate.
+    uP (number) : insulin secretion rate from pancreas
     
     Returns
     -------
-    dx : numpy array
-        Solution to system of differential equations. 
+    dx (numpy array) : solution to system of differential equations. 
     """
     G = p.Q1/(p.VG * p.BW)
     

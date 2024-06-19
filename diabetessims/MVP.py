@@ -7,21 +7,19 @@ with open('diabetessims/config.json', 'r') as f:
 
 params["model"] = "MVP"
 
-def sys(p, d = 0, uI = 0, uP = 0, HR = None):
+def sys(p, d = 0, uI = 0, uP = 0):
     """
     Solves dx = f(x, u, d)
 
     Parameters
     ----------
-    u : int or float 
-        Insulin injection rate.
-    d : int or float 
-        Meal ingestion rate.
+    d (number) : meal ingestion rate
+    uI (number) : insulin injection rate.
+    uP (number) : insulin secretion rate from pancreas
     
     Returns
     -------
-    dx : numpy array
-        Solution to system of differential equations. 
+    dx (numpy array) : solution to system of differential equations. 
     """
     dD1 = d - p.D1/p.taum
     dD2 = (p.D1 - p.D2)/p.taum

@@ -1,6 +1,7 @@
 import numpy as np
 from diabetessims.odeclass import ODE
 import json
+from . import utils
 
     
 class PKPM(ODE):
@@ -75,20 +76,31 @@ class PKPM(ODE):
         # ode
         M = alpha1/delta1
         gamma = self.gammab + alpha2
-        rho = self.rhob + self.krho * (gamma - self.gammab)
-        P = 1/self.k
-        R = (v * M - P*self.delta2)/gamma
-        DIR = R * gamma / rho
-        D = (self.k1m * DIR + rho * DIR)/ (self.k1p * (self.CT - DIR))
+        rho = self.rhob + self.krho * alpha2
+
+        expr1 =  self.k * v * alpha1  - delta1 * self.delta2
+        expr2 = self.CT * self.k * delta1 * (self.rhob + self.krho * alpha2)
+        if (expr1 > 0) and (expr2 > expr1):
+            P = 1/self.k
+            R = (v * M - P*self.delta2)/gamma
+            DIR = R * gamma / rho
+            D = (self.k1m * DIR + rho * DIR)/ (self.k1p * (self.CT - DIR))
+        else:
+            P = v * alpha1 / delta1 / self.delta2
+            R = 0
+            D = 0
+            DIR = 0
         x0 = np.array([M, P, R, gamma, D, DIR, rho])
         ISR = self.get_ISR(G, rho = rho, DIR = DIR)
+
+
         return x0, ISR
     
 
     def eval(self, G):
         dx, ISR = self.sys(G)
         x_new = dx * self.timestep + self.get_state()
-        x_new = x_new * (x_new > 0)
+        x_new = utils.ReLU(x_new)
         self.update_state(x_new)
         return ISR
 
@@ -147,3 +159,4 @@ class PID(ODE):
         self.yprev = y 
         self.I += dI * self.timestep # Updates integral term
         return res        
+
