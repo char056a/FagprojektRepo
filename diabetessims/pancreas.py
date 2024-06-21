@@ -105,33 +105,6 @@ class PKPM(ODE):
         return ISR
 
 
-class SD(ODE):
-    def __init__(self, alpha, gamma, h, KD, ybar, timestep):
-        data = {
-            "state_keys" : ["SRs", "yprev"],
-            "SRs" : 0,
-            "ybar" : ybar,
-            "yprev" : ybar,
-            "alpha" : alpha,
-            "gamma" : gamma,
-            "h" : h,
-            "KD" : KD,
-            "timestep" : timestep
-        }
-        super().__init__(data)
-
-    
-    def eval(self,y):
-        dy = (y - self.yprev)/self.timestep # approx derivative of y
-        dSRs = -self.alpha * (self.SRs + self.gamma * (self.h - y))
-        SRD = max(dy * self.KD, 0)
-        res = max(self.SRs + SRD,0)
-
-        self.SRs += dSRs * self.timestep
-        self.yprev = y
-        return res
-
-
 class PID(ODE):
     def __init__(self, Kp, Td, Ti, ybar, timestep):
         data = {
